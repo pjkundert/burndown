@@ -1,0 +1,2 @@
+* burndown -- Charting for agile projects
+  Uses [[https://github.com/mbostock/d3]] to generate burn-down charts.
