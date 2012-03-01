@@ -1,0 +1,6 @@
+*.pyc
+*~
+*.tgz
+*.tar
+
+.DS_Store
