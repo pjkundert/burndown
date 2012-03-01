@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html;charset=utf-8">
+	<title>Burn Down Charts</title>
+	<style type='text/css'>
+
+	.chart {
+	  margin-left: 42px;
+	  font: 10px sans-serif;
+	  shape-rendering: crispEdges;
+	}
+
+	.chart div {
+	  background-color: steelblue;
+	  text-align: right;
+	  padding: 3px;
+	  margin: 1px;
+	  color: white;
+	}
+
+	.chart rect {
+	  stroke: white;
+	  fill: steelblue;
+	}
+
+	.chart text.bar {
+	  fill: white;
+	}
+
+	</style>
+</head>
+<body>
+	<div id="chart">
+		<h3>SVG</h3>
+	</div>
+	
+	<script type="text/javascript" src="resources/d3.v2.js?2.8.0"></script>
+	<script type="text/javascript">
+		// Container and data
+		var data = [19, 19, 19, 17, 17, 19, 16, 15, 13, 14, 14, 12, 10, 8, 8, 8, 6];
+		var w = (data.length * 20) + 20
+		var h = 400
+
+		// define horizontal scale
+		var x = d3.scale.linear()
+		    .domain([0, data.length])
+		    .range([0, w - 20]);
+		// define vertical scale
+		var y = d3.scale.linear()
+		    .domain([0, d3.max(data)])
+		    .range([0, h - 20]);
+		// create container
+		var chart = d3.select("#chart").append("svg")
+		    .attr("class", "chart")
+		    .attr("width", w)
+		    .attr("height", h)
+		    .style("margin-left", "32px") // Tweak alignment…
+		  .append("g")
+		    .attr("transform", "translate(10,15)");
+		// 
+		chart.selectAll("line")
+		    .data(y.ticks(10))
+		  .enter().append("line")
+		    .attr("x1", 0)
+		    .attr("x2", w - 20)
+		    .attr("y1", y)
+		    .attr("y2", y)
+		    .style("stroke", "#ccc");
+
+		chart.selectAll(".rule")
+		    .data(y.ticks(10))
+		  .enter().append("text")
+		    .attr("x", 0)
+		    .attr("y", y)
+		    .attr("dx", 0)
+		    .attr("text-anchor", "middle")
+		    .text(String);
+
+		chart.selectAll("rect")
+		    .data(data)
+		  .enter().append("rect")
+		    .attr("x", function(d, i) { return i * 20; })
+		    .attr("width", 20)
+		    .attr("height", y);
+
+		chart.selectAll(".bar")
+		    .data(data)
+		  .enter().append("text")
+		    .attr("class", "bar")
+		    .attr("x", function(d, i) { return (i * 20) + 10; })
+		    .attr("y", y)
+		    .attr("dx", ".35em")
+		    .attr("dy", -3)
+		    .attr("text-anchor", "end")
+		    .text(String);
+
+		chart.append("line")
+		    .attr("y1", 0)
+		    .attr("y2", h - 20)
+		    .style("stroke", "#000");
+	</script>
+</body>
+</html>
