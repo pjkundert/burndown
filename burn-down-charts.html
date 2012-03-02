@@ -6,12 +6,12 @@
 	
 	<title>Burn Down Charts</title>
 
-	<link href="<?php echo base_url() ?>media/bootstrap/prettify/prettify.css" type="text/css" rel="stylesheet" />
-	<link href="<?php echo base_url() ?>media/bootstrap/css/bootstrap.min.css" type="text/css" rel="stylesheet" />
-	<link href="<?php echo base_url() ?>media/bootstrap/css/bootstrap-responsive.min.css" type="text/css" rel="stylesheet" />
-	<link href="<?php echo base_url() ?>media/bootstrap/css/style.css" type="text/css" rel="stylesheet" />
+	<link href="http://google-code-prettify.googlecode.com/svn/trunk/src/prettify.css" type="text/css" rel="stylesheet" />
+	<link href="bootstrap/css/bootstrap.min.css" type="text/css" rel="stylesheet" />
+	<link href="bootstrap/css/bootstrap-responsive.min.css" type="text/css" rel="stylesheet" />
+	<link href="bootstrap/css/style.css" type="text/css" rel="stylesheet" />
 
-	<link href="<?php echo base_url() ?>media/css/style.css" type="text/css" rel="stylesheet" />
+	<link href="css/style.css" type="text/css" rel="stylesheet" />
 	<style type='text/css'>
 	html {
 		height: 100%;
@@ -22,14 +22,44 @@
 		padding: 0;
 		font-family: calibri;
 	}
+	#container {
+		padding: 50px 10px 40px;
+		border: solid 1px #666;
+		border-radius: 5px;
+		background-color: #FFF;
+	}
 	</style>
 </head>
 <body style="background-color: #EEE;" onload="prettyPrint()">
-	<div class="chart">
+	<div class="navbar navbar-fixed-top">
+		<div class="navbar-inner">
+			<div class="container">
+				<ul class="nav">
+					<li class="dropdown">
+						<a href="#" class="dropdown" data-toggle="dropdown">
+							Projects
+							<b class="caret"></b>
+						</a>
+						<ul class="dropdown-menu">
+							<li><a href="#">Burn Down</a></li>
+						</ul>
+					</li>
+				</ul>
+			</div>
+		</div>
 	</div>
+	<div id="container" class="container">
+		<div class="chart">
+		</div>
+	</div>
+	<script src="http://google-code-prettify.googlecode.com/svn/trunk/src/prettify.js" type="text/javascript" rel="javascript"></script>
+	<script src="bootstrap/js/jquery-1.7.1.min.js" type="text/javascript" rel="javascript"></script>
+	<script src="bootstrap/js/bootstrap.min.js" type="text/javascript" rel="javascript"></script>
 	
 	<script type="text/javascript" src="resources/d3.v2.js?2.8.0"></script>
 	<script type="text/javascript">
+
+	
 		var allData = {
 			type: 'week',
 			title: 'Week',
@@ -63,7 +93,7 @@
 			}
 		}
 		
-		var w = 1200//document.body.offsetWidth
+		var w = 1170//document.body.offsetWidth
 		var h = 400//document.body.offsetHeight
 		var margin = 20
 		var left = 40
@@ -102,7 +132,7 @@
 		var svg = d3.select('.chart').append('svg')
 			.attr('width', w)
 			.attr('height', h)
-			.attr('style', 'display: block;')
+			.attr('style', 'display: block; margin: 0 auto;')
 		var xAxis = svg.append('g')
 			.attr('class', 'xAxis')
 			.attr('transform', 'translate(' + left + ', ' + margin + ')')
@@ -144,22 +174,28 @@
 		
 		bars.append('rect')
 			.attr('width', barWidth)
-			.attr('height', function (d) { return (y(d.remaining) - y(0)) })
+			.attr('height', 0)
 			.attr('x', barX)
 			.attr('y', function (d) { return -(y(d.remaining) + y(d.totalRemoved) - y(0)) })
 			.attr('style', 'fill: #DDD; fill-opacity: 0.8;')
+			.transition().delay(function (d, i) { return i*20 }).duration(500)
+			.attr('height', function (d) { return (y(d.remaining) - y(0)) })
 		bars.append('rect')
 			.attr('width', barWidth)
-			.attr('height', function (d) { return (y(d.completed) - y(0)) })
+			.attr('height', 0)
 			.attr('x', barX)
 			.attr('y', function (d) { return -(y(d.completed) + y(d.remaining) - y(0) + y(d.totalRemoved) - y(0)) })
 			.attr('style', 'fill: #060; fill-opacity: 0.4;')
+			.transition().delay(function (d, i) { return i*20 + (xMax*20) }).duration(500)
+			.attr('height', function (d) { return (y(d.completed) - y(0)) })
 		bars.append('rect')
 			.attr('width', barWidth)
-			.attr('height', function (d) { return (y(d.totalAdded) - y(0)) })
+			.attr('height', 0)
 			.attr('x', barX)
 			.attr('y', function (d) { return -y(d.totalRemoved) })
 			.attr('style', 'fill: #A00; fill-opacity: 0.5;')
+			.transition().delay(function (d, i) { return i*20 + (xMax*20) }).duration(500)
+			.attr('height', function (d) { return (y(d.totalAdded) - y(0)) })
 			
 		var yAxisX = function (d, i) {
 			return (barWidth/2) + barOffset - (avg*i)
