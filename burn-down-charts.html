@@ -45,43 +45,28 @@
 	
 	<script type="text/javascript" src="resources/d3.v2.js?2.8.0"></script>
 	<script type="text/javascript">
-		var data = [{
-			week: 1,
-			remaining: 45,
-			completed: 12,
-			added: 2,
-			totalAdded: 2
-		}, {
-			week: 2,
-			remaining: 35,
-			completed: 10,
-			added: 0,
-			totalAdded: 2
-		}, {	
-			week: 3,
-			remaining: 23,
-			completed: 12,
-			added: 1,
-			totalAdded: 3
-		}, {
-			week: 4,
-			remaining: 17,
-			completed: 6,
-			added: 1,
-			totalAdded: 4
-		}, {
-			week: 5,
-			remaining: 15,
-			completed: 2,
-			added: 0,
-			totalAdded: 4
-		}, {
-			week: 6,
-			remaining: 7,
-			completed: 8,
-			added: 1,
-			totalAdded: 5
-		}]
+		var allData = {
+			type: 'week',
+			title: 'Week',
+			list: []
+		}
+		var data = allData.list
+		var total = 140
+		for(var u=0;total > 0;u++) {
+			var completed = Math.random()*26
+			total -= completed
+			if(total<0) {
+				total = 0
+			} else {
+				data[data.length] = {
+					segment: data.length,
+					remaining: total,
+					completed: completed,
+					added: 0,
+					totalAdded: 0
+				}
+			}
+		}
 		var w = document.body.offsetWidth
 		var h = document.body.offsetHeight
 		var margin = 20
@@ -125,6 +110,7 @@
 			.data(data, function (d) { return d.remaining })
 		.enter().append('g')
 			.attr('transform', function (d, i) { return 'translate(' + (x(i)) + ', ' + (gHeight + 20) + ')' })
+		// Bar configuration
 		var barWidth = 40
 		var barOffset = 40
 		var barX = function (d, i) {
@@ -149,24 +135,27 @@
 			.attr('x', barX)
 			.attr('y', y(-10))
 			.attr('style', 'fill: #A00; fill-opacity: 0.5;')
-
-		/*
+			
+		var yAxisX = function (d, i) {
+			var avg = (barWidth + (barOffset * 2)) / (data.length - 1)
+			return (barWidth/2) + barOffset - (avg*i)
+		}
+		var yAxis = svg.append('g')
+			.attr('class', 'xAxis')
+			.attr('transform', 'translate(' + left + ', ' + margin + ')')
+		var yRule = yAxis.selectAll('.rule')
+			.data(data)
+		.enter().append('g')
+			.attr("transform", function(d, i) { return 'translate(' + x(i) + ', ' + (gHeight) + ')'; });
+		yRule.append("text")
+			.data(data, function (d) { return d.segment })
+		    .attr("x", yAxisX)
+		    .attr("dy", ".0em")
+		    .attr("transform", "translate(0,18)")
+			.attr('text-anchor', 'middle')
+			.attr('style', 'font-size: 10pt; fill: #BBB;')
+		    .text(function (d) { return allData.title + ' ' + d.segment });
 		
-	var bars = svg.selectAll('.bars')
-		.data(data, function (d) { return d.remaining })
-	.enter().append('g')
-		.attr('transform', function (d, i) { return 'translate(' + (x(i) + 120) + ', ' + (gHeight + 20) + ')rotate(180)' })
-	var barWidth = 40
-	bars.append('rect')
-		.attr('width', barWidth)
-		.attr('height', function (d) { return (y(d.remaining)) })
-		.attr('x', function (d, i) { return (i*((barWidth / (data.length - 1)) + 40)) })
-		.attr('y', 0)
-		.attr('style', 'fill: DDD; fill-opacity: 0.8;')
-		var w = (data.length * 20) + 20
-		var h = 400
-
-		*/
 	</script>
 </body>
 </html>
