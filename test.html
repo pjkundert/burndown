@@ -50,9 +50,9 @@
 		var svg = d3.select("#chart").append("svg")
 		    .attr("width", w)
 		    .attr("height", h)
-		    .style("padding-right", "30px")
+		    .style("padding-right", "50px")
 		  .append("g")
-		    .attr("transform", "translate(" + x(1) + "," + (h - 20) + ")scale(-1,-1)");
+		    .attr("transform", "translate(50,20)");
 
 		// A sliding container to hold the bars.
 		var body = svg.append("g")
@@ -65,10 +65,10 @@
 		var title = svg.append("text")
 		    .attr("class", "title")
 		    .attr("dy", ".71em")
-		    .attr("transform", "translate(" + x(1) + "," + y(1) + ")scale(-1,-1)")
-		    .text(2000);
+		    .attr("transform", "translate(" + (w - 450) + ",20)")
+		    .text('Burn Down');
 
-		d3.csv("../Preformance Monitoring/resources/population.csv", function(data) {
+		d3.csv("resources/population.csv", function(data) {
 
 		  // Convert strings to numbers.
 		  data.forEach(function(d) {
@@ -93,16 +93,17 @@
 		      .data(y.ticks(10))
 		    .enter().append("g")
 		      .attr("class", "rule")
-		      .attr("transform", function(d) { return "translate(0," + y(d) + ")"; });
+		      .attr("transform", function(d) { return "translate(0," + (h - y(d) - 40) + ")"; });
 
 		  rules.append("line")
 		      .attr("x2", w);
 
 		  rules.append("text")
 		      .attr("x", 6)
-		      .attr("dy", ".35em")
-		      .attr("transform", "rotate(180)")
-		      .text(function(d) { return Math.round(d / 1e6) + "M"; });
+		      .attr("dy", ".30em")
+		      .attr("transform", "translate(-10,0)")
+			  .attr('text-anchor', 'end')
+		      .text(String);
 
 		  // Add labeled rects for each birthyear.
 		  var years = body.selectAll("g")
@@ -114,23 +115,27 @@
 		      .data(d3.range(2))
 		    .enter().append("rect")
 		      .attr("x", 1)
+			  .attr('y', 60)
+			  .attr('transform', 'translate(50,' + (h + 20) + ')scale(-1,-1)')
 		      .attr("width", x(5) - 2)
 		      .attr("height", 1e-6);
 
+
 		  years.append("text")
-		      .attr("y", -6)
-		      .attr("x", -x(5) / 2)
-		      .attr("transform", "rotate(180)")
+		      .attr("y", h - 50)
+		      .attr("x", 25)
+		      .attr("transform", "rotate(0)")
 		      .attr("text-anchor", "middle")
-		      .style("fill", "#fff")
+		      .style("fill", "#FFF")
 		      .text(String);
+
 
 		  // Add labels to show the age.
 		  svg.append("g").selectAll("text")
 		      .data(d3.range(0, age1 + 5, 5))
 		    .enter().append("text")
 		      .attr("text-anchor", "middle")
-		      .attr("transform", function(d) { return "translate(" + (x(d) + x(5) / 2) + ",-4)scale(-1,-1)"; })
+		      .attr("transform", function(d) { return "translate(" + (x(d) + x(5) / 2) + ", 465)"; })
 		      .attr("dy", ".71em")
 		      .text(String);
 
@@ -140,21 +145,54 @@
 		      .key(function(d) { return d.year - d.age; })
 		      .rollup(function(v) { return v.map(function(d) { return d.people; }); })
 		      .map(data);
-
-		  // Allow the arrow keys to change the displayed year.
-		  d3.select(window).on("keydown", function() {
-		    switch (d3.event.keyCode) {
-		      case 37: year = Math.max(year0, year - 10); break;
-		      case 39: year = Math.min(year1, year + 10); break;
-		    }
-		    redraw();
-		  });
+		
+		var da = [{ x: 0, y: 0 }, { x: 70, y: 30 }, { x: 150, y: 55 }, { x: 180, y: 90 }, { x: 220, y: 120 },
+			{ x: 100, y: 100 }, { x: 210, y: 230 }, { x: 250, y: 255 }, { x: 280, y: 330 }, { x: 420, y: 420 }]
+		body.append('g').selectAll('line')
+			.data(da)
+		.enter().append('line')
+			.attr('x1', function (d) { return d.x })
+			.attr('x2', function (d) { return d.x })
+			.attr('y1', function (d) { return d.y })
+			.attr('y2', function (d) { return d.y })
+			.style('stroke', '#C00')
+			.style('stroke-width', '3')
+			.transition().delay(function (d, i) { return (i*50) }).duration(100)
+			.attr('x1', function (d) { return d.x })
+			.attr('x2', function (d, i) {
+				if(da[i+1]) {
+					return da[i+1].x
+				} else {
+					return d.x
+				}
+			})
+			.attr('y1', function (d) { return d.y })
+			.attr('y2', function (d, i) {
+				if(da[i+1]) {
+					return da[i+1].y
+				} else {
+					return d.y
+				}
+			})
+		body.append('g').selectAll('circle')
+			.data(da)
+		.enter().append('circle')
+			.attr('cx', function (d) { return d.x })
+			.attr('cy', function (d) { return d.y })
+			.attr('r', 5)
+			.style('fill', '#C00')
+			.style('fill-opacity', '0')
+			.style('stroke', '#500')
+			.style('stroke-opacity', '0')
+			.transition().delay(function (d, i) { return (i*50) }).duration(100)
+			.style('fill-opacity', '1')
+			.style('stroke-opacity', '1')
 
 		  redraw();
 
 		  function redraw() {
 		    if (!(year in data)) return;
-		    title.text(year);
+		    //title.text(year);
 
 		    body.transition()
 		        .duration(750)

@@ -4,7 +4,16 @@
 	<meta http-equiv="content-type" content="text/html;charset=utf-8">
 	<title>Burn Down Charts</title>
 	<style type='text/css'>
-
+	html {
+		height: 100%;
+	}
+	body {
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		font-family: calibri;
+	}
+	/*
 	.chart {
 	  margin-left: 42px;
 	  font: 10px sans-serif;
@@ -27,78 +36,126 @@
 	.chart text.bar {
 	  fill: white;
 	}
-
+	*/
 	</style>
 </head>
 <body>
-	<div id="chart">
-		<h3>SVG</h3>
+	<div class="chart">
 	</div>
 	
 	<script type="text/javascript" src="resources/d3.v2.js?2.8.0"></script>
 	<script type="text/javascript">
-		// Container and data
-		var data = [19, 19, 19, 17, 17, 19, 16, 15, 13, 14, 14, 12, 10, 8, 8, 8, 6];
-		var w = (data.length * 20) + 20
-		var h = 400
-
-		// define horizontal scale
+		var allData = {
+			type: 'week',
+			title: 'Week',
+			list: []
+		}
+		var data = allData.list
+		var total = 140
+		for(var u=0;total > 0;u++) {
+			var completed = Math.random()*26
+			total -= completed
+			if(total<0) {
+				total = 0
+			} else {
+				data[data.length] = {
+					segment: data.length,
+					remaining: total,
+					completed: completed,
+					added: 0,
+					totalAdded: 0
+				}
+			}
+		}
+		var w = document.body.offsetWidth
+		var h = document.body.offsetHeight
+		var margin = 20
+		var left = 40
+		var bottom = 40
+		var gWidth = w - left - margin
+		var gHeight = h - bottom - margin
 		var x = d3.scale.linear()
-		    .domain([0, data.length])
-		    .range([0, w - 20]);
-		// define vertical scale
+			.domain([0, d3.max(data, function (d, i) { return i })])
+			.range([0, w - left - margin])
 		var y = d3.scale.linear()
-		    .domain([0, d3.max(data)])
-		    .range([0, h - 20]);
-		// create container
-		var chart = d3.select("#chart").append("svg")
-		    .attr("class", "chart")
-		    .attr("width", w)
-		    .attr("height", h)
-		    .style("margin-left", "32px") // Tweak alignment…
-		  .append("g")
-		    .attr("transform", "translate(10,15)");
-		// 
-		chart.selectAll("line")
-		    .data(y.ticks(10))
-		  .enter().append("line")
-		    .attr("x1", 0)
-		    .attr("x2", w - 20)
-		    .attr("y1", y)
-		    .attr("y2", y)
-		    .style("stroke", "#ccc");
-
-		chart.selectAll(".rule")
-		    .data(y.ticks(10))
-		  .enter().append("text")
-		    .attr("x", 0)
-		    .attr("y", y)
-		    .attr("dx", 0)
-		    .attr("text-anchor", "middle")
+			.domain([d3.min(data, function (d) { return -d.totalAdded }), d3.max(data, function (d) { return d.remaining + d.completed })])
+			.range([0, h - bottom -margin])
+		
+		var svg = d3.select('.chart').append('svg')
+			.attr('width', w)
+			.attr('height', h)
+			.attr('style', 'display: block; shape-rendering: crispEdges;')
+		var xAxis = svg.append('g')
+			.attr('class', 'xAxis')
+			.attr('transform', 'translate(' + left + ', ' + margin + ')')
+		var xRule = xAxis.selectAll('.rule')
+			.data(y.ticks(10))
+		.enter().append('g')
+			.attr("transform", function(d) { return 'translate(0,' + (gHeight - y(d)) + ')'; });
+		xRule.append('line')
+			.attr('x2', gWidth)
+			.attr('style', 'stroke: #EEE; stroke-width: 1; stroke-opacity: 1;')
+		xRule.append("text")
+		    .attr("x", 6)
+		    .attr("dy", ".25em")
+		    .attr("transform", "translate(-10,0)")
+			.attr('text-anchor', 'end')
+			.attr('style', 'font-size: 10pt; fill: #BBB;')
 		    .text(String);
-
-		chart.selectAll("rect")
-		    .data(data)
-		  .enter().append("rect")
-		    .attr("x", function(d, i) { return i * 20; })
-		    .attr("width", 20)
-		    .attr("height", y);
-
-		chart.selectAll(".bar")
-		    .data(data)
-		  .enter().append("text")
-		    .attr("class", "bar")
-		    .attr("x", function(d, i) { return (i * 20) + 10; })
-		    .attr("y", y)
-		    .attr("dx", ".35em")
-		    .attr("dy", -3)
-		    .attr("text-anchor", "end")
-		    .text(String);
-
-		chart.append("line")
-		    .attr("y1", 0)
-		    .attr("y2", h - 20)
-		    .style("stroke", "#000");
+		
+		var graph = svg.append('g')
+			.attr('width', gWidth)
+			.attr('height', gHeight)
+		var bars = graph.selectAll('.bars')
+			.data(data, function (d) { return d.remaining })
+		.enter().append('g')
+			.attr('transform', function (d, i) { return 'translate(' + (x(i)) + ', ' + (gHeight + 20) + ')' })
+		// Bar configuration
+		var barWidth = 40
+		var barOffset = 40
+		var barX = function (d, i) {
+			var avg = (barWidth + (barOffset * 2)) / (data.length - 1)
+			return barWidth + barOffset - (avg*i)
+		}
+		bars.append('rect')
+			.attr('width', barWidth)
+			.attr('height', function (d) { return (y(d.remaining) - y(0)) })
+			.attr('x', barX)
+			.attr('y', function (d) { return -(y(d.remaining)) })
+			.attr('style', 'fill: #DDD; fill-opacity: 0.8;')
+		bars.append('rect')
+			.attr('width', barWidth)
+			.attr('height', function (d) { return (y(d.completed) - y(0)) })
+			.attr('x', barX)
+			.attr('y', function (d) { return -(y(d.completed) + y(d.remaining) - y(0)) })
+			.attr('style', 'fill: #060; fill-opacity: 0.4;')
+		bars.append('rect')
+			.attr('width', barWidth)
+			.attr('height', function (d) { return (y(d.totalAdded) - y(0)) })
+			.attr('x', barX)
+			.attr('y', y(-10))
+			.attr('style', 'fill: #A00; fill-opacity: 0.5;')
+			
+		var yAxisX = function (d, i) {
+			var avg = (barWidth + (barOffset * 2)) / (data.length - 1)
+			return (barWidth/2) + barOffset - (avg*i)
+		}
+		var yAxis = svg.append('g')
+			.attr('class', 'xAxis')
+			.attr('transform', 'translate(' + left + ', ' + margin + ')')
+		var yRule = yAxis.selectAll('.rule')
+			.data(data)
+		.enter().append('g')
+			.attr("transform", function(d, i) { return 'translate(' + x(i) + ', ' + (gHeight) + ')'; });
+		yRule.append("text")
+			.data(data, function (d) { return d.segment })
+		    .attr("x", yAxisX)
+		    .attr("dy", ".0em")
+		    .attr("transform", "translate(0,18)")
+			.attr('text-anchor', 'middle')
+			.attr('style', 'font-size: 10pt; fill: #BBB;')
+		    .text(function (d) { return allData.title + ' ' + d.segment });
+		
 	</script>
 </body>
 </html>
