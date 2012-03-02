@@ -1,2 +1,9 @@
 * burndown -- Charting for agile projects
   Uses [[https://github.com/mbostock/d3]] to generate burn-down charts.
+** server.py -- SimpleHTTPServer based API test server
+   Execute this server, and it will serve up the current directory.
+   Specifically, any file under the api/ directory will be served as:
+   
+       Content-Type: application/json
+
+   

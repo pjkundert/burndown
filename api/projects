@@ -1,0 +1,16 @@
+[{
+    name: "burndown",
+    types: [
+        "sprint",
+        "calendar",
+        "effort",
+    ]}
+},
+{
+    name: "port"
+    types: [
+        "sprint",
+        "calendar",
+        "effort",
+    ]}
+}]
