@@ -4,3 +4,4 @@
 *.tar
 
 .DS_Store
+.#*
