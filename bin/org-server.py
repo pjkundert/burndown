@@ -17,14 +17,17 @@ api/data/<project>/<time-style>
        effort		Data is aggregated for periods of effort time elapsed
 
 """
-
 import argparse
 import cgi
-import git
 import json
 import string
 import textwrap
 import time
+
+import git		# modules from site-packages
+
+import mathdict		# modules local to project
+
 
 def project_data( repository, projects ):
     """Given a repo name, return a dict containing a list of
@@ -117,23 +120,59 @@ def project_data_parse( data, project, style ):
 
     Searches each blob for an org-mode table like:
 
+    #+BEGIN: columnview :hlines 1 :id local
     | Task                                                   | Effort | CLOCKSUM |
     |--------------------------------------------------------+--------+----------|
-    | * TODO Project burndown <2012-03-02 Fri>               |  19:00 |    10:00 |
+    | * TODO Project burndown <2012-03-02 Fri>               |  22:00 |    22:00 |
     | ** DONE Display bar chart for different periods        |   2:00 |     4:00 |
     | ** NEXT Split Bar display                              |   1:00 |     6:00 |
     | ** NEXT Horizontal/Vertical Grid Lines                 |   1:00 |          |
     | ** TODO Define JSON format                             |   2:00 |          |
+    | ** TODO Create org-mode/git web service                |  16:00 |    11:00 |
+    | *** DONE Load Git repo                                 |   4:00 |     4:00 |
+    | *** TODO Parse org-mode data                           |   4:00 |          |
+    | *** DONE Create Python web server                      |   8:00 |     7:00 |
+    #+END:
 
-    From this we harvest the aggregate data, and track the state-changes of tasks.
+    From this we harvest the aggregate data, and track the
+    state-changes of tasks.  We'll create a tree of task objects,
+    containing roll-up statistics of all of the sub-tasks in each
+    state.
     """
+    class task( object ):
+        def __init__( self, state, name, effort, clocksum ):
+            self.subtask	= []
+            self.state		= state
+            self.name		= name
+            self.seconds	= timedict
+
+        def append( self, child ):
+            self.subtask.append( child )
+
+        def totals( self ):
+            result		= collections.defaultdict(int)
+
+            # Add all the subtask's results, into per-state buckets
+            for s in self.subtask:
+                for k, v in s.totals().items():
+                    result[k]  += v
+
+            # We now have the totals for all children.  If our own
+            # totals differ from the sum of all our subtasks, they
+            # must be greater -- this means that this roll-up task has
+            # also accrued additional individual effort and/or
+            # clocksum.  Add that, too.
+            if self.
+
+            return result
+
     results			= {}
 
     results["project"]		= project
     results["style"]		= style
     for blob in data[project]:
-        pass
-
+        tbl			=
+    # WORKING HERE
     return results
 
 def deduce_encoding( available, environ, accept=None ):
@@ -322,6 +361,10 @@ def data_request( repository, project, path,
                                            environ=environ, accept=accept )
 
     # Confirm that project name and (optional) style are valid.
+    # Default to "effort" style, because it gives us the best
+    # information: based on the actual amount of effort applied, what
+    # is the remaining effort that will be required to complete the
+    # project.
     proj, style		= None, None
     hexsha, data	= None, None
     try:
@@ -353,7 +396,7 @@ def data_request( repository, project, path,
         data_request.cache	= {}
     stats		= data_request.cache.get( proj, None )
     if not stats:
-        stats           = project_data_parse( data, proj, style )
+        stats           = project_data_parse( data, proj )
         data_request.cache[proj]= stats
 
     response		= None
