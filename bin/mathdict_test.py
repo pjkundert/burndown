@@ -54,8 +54,33 @@ def test_timedict():
         "one-oh-two":	"1:02",
         "one-thirty":   "1:30",
         "two":		"2:00",
+        "two-and-a-bit":"2:02:02",
     }
 
     times		= mathdict.timedict(int)
     times              += names
     assert times["one-oh-two"] == 1 * 60 * 60 + 2 * 60
+
+    # Trigger reversion of a timedict (containing seconds) back to
+    # plain dict (containing textual times) using the reversed
+    # builtin.
+    d                   = dict( reversed( times ))
+    assert d["one-oh-two"] == "1:02"
+    assert d["one-oh-two"] == "1:02"
+    assert d["two-and-a-bit"] == "2:02:02"
+
+
+    timesf		= mathdict.timedict(float)
+
+    timesf             += {"a": "012:34:56.789"}
+    timesf             += {"b": "0:00:00.12345"}
+    timesf             += {"c": "0:00"}
+    timesf             += {"d": "1"}
+    assert abs( timesf["a"] - (12*60*60 + 34*60 + 56.789) ) < .0001
+
+    d			= dict( reversed( timesf ))
+    print d["a"]
+    assert d["a"] == "12:34:56.789"
+    assert d["b"] == "0:00:00.12345"
+    assert d["c"] == "0:00"
+    assert d["d"] == "1:00"

@@ -161,11 +161,16 @@ class timedict( mathdict ):
         multiplier		= 60 * 60
         timespec                = []
 
-        while seconds >= 1:
-            timespec.append( seconds / multiplier )
-            seconds            %= multiplier
-            multiplier         /= 60
-
+        timespec.append( "%d" % ( seconds / ( 60*60 )))
+        seconds                %= 60*60
+        timespec.append( "%02d" % ( seconds / 60 ))
+        seconds                %= 60
+        if seconds:
+            timespec.append( "%02d" % ( seconds ))
+            seconds            %= 1
+            if seconds:
+                # Must be float, now < 1.0; turns 0.123000 into .123
+                timespec[-1]   += ("%f" % ( seconds )).strip( "0" )
         return ":".join( timespec )
 
     def __iadd__( self, rhs ):
@@ -174,8 +179,23 @@ class timedict( mathdict ):
             <timedict> += ( key, "HH:MM" )
 
         tuples specially; passes everything else along to mathdict.
+        For "adding" regular dicts full of textual timespecs to a
+        timedict.  Depends on the fact that mathdict.__iadd__ from a
+        plain dict recursively triggers __iadd__ for each dict tuple,
+        finding this code in the derived class.
         """
         if isinstance( rhs, tuple ) and isinstance( rhs[1], basestring ):
             self[rhs[0]]       += self._from_hms( rhs[1] )
             return self
-        return mathdict.__iadd__( self, rhs )
+        return mathdict.__iadd__( self, rhs ) # Otherwise, base mathdict handles
+
+    def __reversed__( self ):
+        """
+            t = timedict()
+            t += ("one-oh-two", "1:02")
+            assert t["one-oh-two"] == 62
+            d = dict( reversed( ))
+            assert d["one-oh-two"] == "1:02"
+
+        """
+        return ( (k, self._into_hms( v )) for k, v in self.iteritems() )

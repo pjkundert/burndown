@@ -26,7 +26,7 @@ import time
 
 import git		# modules from site-packages
 
-import mathdict		# modules local to project
+from mathdict import *	# modules local to project
 
 
 def project_data( repository, projects ):
@@ -114,6 +114,59 @@ project_data.hexsha		= None
 project_data.result		= None
 
 
+class task( object ):
+    """
+    Each task.data is of the form:
+
+        .description = "Project burndown <2012-03-02 Fri>"
+        .state = "TODO"
+        .data = {
+            "todo": <timedict> {
+                "Effort":	"22:00",
+                "CLOCKSUM":	"24:00"
+            }
+        }
+
+
+    """
+    def __init__( self, state, name, times=None ):
+        self.state		= state
+        self.name		= name
+        self.data		= timedict(int)
+        if times:
+            for t in times:
+                self.data      += t
+        self.subtask		= []
+
+    def append( self, child ):
+        self.subtask.append( child )
+
+    def totals( self ):
+        res			= {}
+
+        # Add all the subtask's times, into per-state buckets
+        for s in self.subtask:
+            for state, times in s.totals().iteritems():
+                if state not in res:
+                    res[state]	= timedict(int)
+                res[state]     += times
+
+        # We now have the totals for all children.  If our own
+        # data differs from the sum of all our subtasks, they
+        # must be greater -- this means that this roll-up task has
+        # also accrued additional individual effort and/or
+        # clocksum.  Add that, too.
+        tot			= timedict(int)
+        for state, times in res:
+            tot                += times
+
+        dif			= tot - self.data
+        if self.state not in res:
+            res[self.state]	= timedict(int)
+        res[self.state]        += dif
+
+        return result
+
 def project_data_parse( data, project, style ):
     """Return the parse org-mode project statistics data for one
     project, from the supplied data.
@@ -123,7 +176,7 @@ def project_data_parse( data, project, style ):
     #+BEGIN: columnview :hlines 1 :id local
     | Task                                                   | Effort | CLOCKSUM |
     |--------------------------------------------------------+--------+----------|
-    | * TODO Project burndown <2012-03-02 Fri>               |  22:00 |    22:00 |
+    | * TODO Project burndown <2012-03-02 Fri>               |  22:00 |    24:00 |
     | ** DONE Display bar chart for different periods        |   2:00 |     4:00 |
     | ** NEXT Split Bar display                              |   1:00 |     6:00 |
     | ** NEXT Horizontal/Vertical Grid Lines                 |   1:00 |          |
@@ -139,32 +192,6 @@ def project_data_parse( data, project, style ):
     containing roll-up statistics of all of the sub-tasks in each
     state.
     """
-    class task( object ):
-        def __init__( self, state, name, effort, clocksum ):
-            self.subtask	= []
-            self.state		= state
-            self.name		= name
-            self.seconds	= timedict
-
-        def append( self, child ):
-            self.subtask.append( child )
-
-        def totals( self ):
-            result		= collections.defaultdict(int)
-
-            # Add all the subtask's results, into per-state buckets
-            for s in self.subtask:
-                for k, v in s.totals().items():
-                    result[k]  += v
-
-            # We now have the totals for all children.  If our own
-            # totals differ from the sum of all our subtasks, they
-            # must be greater -- this means that this roll-up task has
-            # also accrued additional individual effort and/or
-            # clocksum.  Add that, too.
-            if self.
-
-            return result
 
     results			= {}
 
