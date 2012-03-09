@@ -53,11 +53,16 @@ class mathdict( collections.defaultdict ):
                 self           += i
             return self
         raise NotImplementedError()
+    def __add__( self, rhs ):
+        """<mathdict> + <mathdict>"""
+        if isinstance( rhs, mathdict ):
+            res			= self.__class__(self.default_factory)
+            res                += self
+            res                += rhs
+            return res
+        raise NotImplementedError()
     def __radd__( self, lhs ):
         """? += <mathdict> -- Not Implemented"""
-    def __add__( self, rhs ):
-        """<mathdict> + ? -- Not Implemented"""
-        raise NotImplementedError()
 
     def __isub__( self, rhs ):
         """<mathdict> -= [<mathdict>, (k,v)]"""
@@ -76,11 +81,16 @@ class mathdict( collections.defaultdict ):
                 self           -= i
             return self
         raise NotImplementedError()
+    def __sub__( self, rhs ):
+        """<mathdict> - <mathdict>"""
+        if isinstance( rhs, mathdict ):
+            res			= self.__class__(self.default_factory)
+            res                += self
+            res                -= rhs
+            return res
+        raise NotImplementedError()
     def __rsub__( self, lhs ):
         """? -= <mathdict> -- Not Implemented"""
-    def __sub__( self, rhs ):
-        """<mathdict> - ? -- Not Implemented"""
-        raise NotImplementedError()
 
     def __imul__( self, rhs ):
         """<mathdict> *= [<mathdict>, (k,v)]"""
@@ -90,7 +100,6 @@ class mathdict( collections.defaultdict ):
         elif isinstance( rhs, mathdict ):
             for k in self.keys():
                 if k not in rhs:
-                    print "added key %s" % k
                     self[k]    *= rhs.default_factory()
             for k, v in rhs.iteritems():
                 self[k]        *= v
@@ -100,11 +109,16 @@ class mathdict( collections.defaultdict ):
                 self           *= i
             return self
         raise NotImplementedError()
+    def __mul__( self, rhs ):
+        """<mathdict> * <mathdict>"""
+        if isinstance( rhs, mathdict ):
+            res			= self.__class__(self.default_factory)
+            res                += self
+            res                *= rhs
+            return res
+        raise NotImplementedError()
     def __rmul__( self, lhs ):
         """? *= <mathdict> -- Not Implemented"""
-    def __mul__( self, rhs ):
-        """<mathdict> * ? -- Not Implemented"""
-        raise NotImplementedError()
 
     def __idiv__( self, rhs ):
         """<mathdict> /= [<mathdict>, (k,v)]"""
@@ -123,19 +137,26 @@ class mathdict( collections.defaultdict ):
                 self           /= i
             return self
         raise NotImplementedError()
-    def __rdiv__( self, lhs ):
-        """? *= <mathdict> -- Not Implemented"""
-    def __div__( self, rhs ):
-        """<mathdict> * ? -- Not Implemented"""
+    def __mul__( self, rhs ):
+        """<mathdict> / <mathdict>"""
+        if isinstance( rhs, mathdict ):
+            res			= self.__class__(self.default_factory)
+            res                += self
+            res                /= rhs
+            return res
         raise NotImplementedError()
+    def __rdiv__( self, lhs ):
+        """? /= <mathdict> -- Not Implemented"""
+
 
 class timedict( mathdict ):
-    """
-    Deals in times, in the form:
+    """Deals in times, in the form:
 
-        ("key", "H[H...[:MM[:SS")
+        ("key", "H[:MM[:SS[.s]]]]")
 
-    and converts these values into seconds.  Assumes:
+    and converts these values into seconds, optionally including
+    fractional seconds if the underlying mathdict deals in floats.
+    Parses:
 
       H
       H:MM
@@ -149,8 +170,11 @@ class timedict( mathdict ):
 
         for segment in timespec.split( ":" ):
             assert multiplier >= 1  # If reaches 0, too many segments!
-            print segment, multiplier
-            value		= self.default_factory( segment )
+            if segment:
+                value		= self.default_factory( segment )
+            else:
+                # Handles: "", "0:", ":00"; empty segments ==> 0
+                value		= self.default_factory()
             if multiplier      <= 60:
                 assert value < 60
             seconds    += value * multiplier
@@ -190,12 +214,7 @@ class timedict( mathdict ):
         return mathdict.__iadd__( self, rhs ) # Otherwise, base mathdict handles
 
     def __reversed__( self ):
+        """Returns an iterator over sorted (key, value) data, reverted
+        back into "HH:MM[:SS[.s]" form.
         """
-            t = timedict()
-            t += ("one-oh-two", "1:02")
-            assert t["one-oh-two"] == 62
-            d = dict( reversed( ))
-            assert d["one-oh-two"] == "1:02"
-
-        """
-        return ( (k, self._into_hms( v )) for k, v in self.iteritems() )
+        return ( (k, self._into_hms( self[k] )) for k in sorted( self.keys()) )

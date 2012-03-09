@@ -20,6 +20,7 @@ api/data/<project>/<time-style>
 import argparse
 import cgi
 import json
+import re
 import string
 import textwrap
 import time
@@ -127,26 +128,75 @@ class task( object ):
             }
         }
 
-
     """
-    def __init__( self, state, name, times=None ):
+    def __init__( self, state, description, times=None ):
         self.state		= state
-        self.name		= name
+        self.description	= description
         self.data		= timedict(int)
         if times:
             for t in times:
                 self.data      += t
         self.subtask		= []
 
-    def append( self, child ):
+
+    def format( self, level=1, cols=None ):
+        if cols is None:
+            cols                = sorted( self.data.keys(), reverse=True )
+        timespecs		= collections.defaultdict(str, reversed( self.data ))
+
+        return "| %s %-4s %-*.*s | %s |" % (
+            "*" * level, self.state, 56-7-level, 56-7-level, self.description,
+            " | ".join( "%8s" % timespecs[k] for k in cols ))
+
+    def __str__( self ):
+        return self._format()
+
+    def walk( self, level=1 ):
+        yield ( self, level )
+        for child in self.subtask:
+            for record in child.walk( level+1 ):
+                yield record
+
+    def display( self, legend=True, cols=None ):
+        if cols is None:
+            cols                = sorted( self.data.keys(), reverse=True )
+        result			= []
+        if legend:
+            result.append( "| %-56s" % "Task"
+                           + "".join( "| %-8s " % col
+                                      for col in cols )
+                           + "|" )
+            result.append( "|-" + "-" * 56
+                           + ( "|" + "-" * 10 ) * len( cols )
+                           + "|" )
+        for tsk, lvl in self.walk():
+            result.append( tsk.format( lvl, cols=cols ))
+        return "\n".join( result )
+
+    def add( self, child ):
         self.subtask.append( child )
 
     def totals( self ):
+        """
+        Returns a tuple containing the following 3 data:
+
+           o grand totals of each column, broken down by task state:
+             {"TODO": <timedict>{
+                 "CLOCKSUM": 10800, "Effort": 21600},
+              "DONE": <timedict>{
+                 "CLOCKSUM": 54800, "Effort": 50400}, ...}
+
+           o this task's individual contribution:
+             <timedict>{"CLOCKSUM": 10800, "Effort": 0}
+
+           o all subtasks contributions:
+             <timedict>{"CLOCKSUM": 75600, "Effort": 79200}
+        """
         res			= {}
 
         # Add all the subtask's times, into per-state buckets
         for s in self.subtask:
-            for state, times in s.totals().iteritems():
+            for state, times in s.totals()[0].iteritems():
                 if state not in res:
                     res[state]	= timedict(int)
                 res[state]     += times
@@ -156,16 +206,106 @@ class task( object ):
         # must be greater -- this means that this roll-up task has
         # also accrued additional individual effort and/or
         # clocksum.  Add that, too.
-        tot			= timedict(int)
-        for state, times in res:
-            tot                += times
+        sub			= timedict(int)
+        for state, times in res.items():
+            print "totals: summing %r" % times
+            sub                += times
 
-        dif			= tot - self.data
+        our			= self.data - sub
         if self.state not in res:
             res[self.state]	= timedict(int)
-        res[self.state]        += dif
+        res[self.state]        += our
 
-        return result
+        return res, our, sub
+
+
+def parse_tasks( lines ):
+    """A generator that returns a sequence of (task, level).
+
+    At level 0, scan lines of input from the 'lines iterator
+    'til we find the start of a table.  Then, deduces the column
+    names, and begins to scan tasks at level 1.
+
+    After parsing the next task, the level (number of leading *
+    characters) is examined.  If it is greater than our level, the
+    task is added as a sub-task.  If less or equal, the (task, leval)
+    is yielded and the parse ends.
+    """
+    found			= False
+    for line in lines:
+        if line.startswith("#+BEGIN:"):
+            found		= True
+            break
+    if not found:
+        raise Exception("No org-mode table found")
+
+    line			= next( lines )
+    cols			= list( c for c in map( string.strip, line.split( "|" )) if c )
+    print "parse_tasks: columns %r" % ( cols )
+    next( lines ) # discard separator |---|
+
+    refirst			= re.compile( r"\s* \| \s* ( \*+ ) \s* ( \w+ )", re.VERBOSE )
+    revalue			= re.compile( r"\s* ( [^|]* ) \|", re.VERBOSE )
+    for line in lines:
+        #      | ** TODO
+        #        ^^ ^^^^
+        pos			= 0
+        match			= refirst.match( line, pos=pos )
+        if match is None:
+            assert line.startswith( "#+END" )
+            break
+
+        print "parse_tasks: Begins: %s" % ( repr( match.groups() ))
+        stars, state		= match.groups()
+        pos			= match.end()
+
+        # ...  Project burndown <2012-03-02 Fri>          |
+        #      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        # ...  22:00 |
+        #      ^^^^^^
+        vals			= []
+        while pos < len( line ):
+            match		= revalue.match( line, pos=pos )
+            if match is None:
+                break
+            vals.append( match.group(1).strip() )
+            pos			= match.end()
+
+        assert len( cols ) == len( vals )
+        assert cols[0] == "Task"
+        descr			= vals[0]
+
+        yield task( state, descr, zip( cols[1:], vals[1:] )), len( stars )
+
+
+def parse_task_heirarchy( lines ):
+    stack		= []
+    for tsk, lvl in parse_tasks( lines ):
+        assert lvl > 0
+        if lvl > len( stack ):
+             #   | *  A  Stack Before: []
+             #   | ** B  Stack After:  [A]
+            assert lvl == len( stack ) + 1
+            stack.append( tsk )
+        elif lvl == len( stack ):
+            assert lvl > 1
+             #   | *  A  Stack Before: [A, B]
+             #   | ** B  - Make B a child of A, replace B with new C
+             # > | ** C  Stack After:  [A, C]
+            stack[-2].add( stack[-1] )
+            stack[-1]	= tsk
+        else:
+            while lvl < len( stack ):
+                #   | ***
+                # > | **
+                stack[-2].add( stack[-1] )
+                stack.pop()
+    while len( stack ) > 1:
+        stack[-2].add( stack[-1] )
+        stack.pop()
+    assert len( stack ) == 1
+    return stack[0]
+
 
 def project_data_parse( data, project, style ):
     """Return the parse org-mode project statistics data for one
@@ -198,7 +338,8 @@ def project_data_parse( data, project, style ):
     results["project"]		= project
     results["style"]		= style
     for blob in data[project]:
-        tbl			=
+        #tbl			=
+        pass
     # WORKING HERE
     return results
 
