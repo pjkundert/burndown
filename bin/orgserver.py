@@ -97,7 +97,10 @@ def project_data( repository, projects ):
                 print "No %s.org found in commit %8.8s" %( p, commit.hexsha )
                 project_data.hexsha = None	# Invalidate partial result data!
                 raise
-            project_data.result.setdefault( p, [] ).append( b )
+            bl                  = project_data.result.setdefault( p, [] )
+            if not bl or bl[-1].hexsha != b.hexsha:
+                bl.insert( 0, b )
+            # else:d print "Dropping duplicate blob:" + b.hexsha
 
         commit              = commit.parents[0] if commit.parents else None
 
@@ -122,11 +125,14 @@ class task( object ):
         .description = "Project burndown <2012-03-02 Fri>"
         .state = "TODO"
         .data = {
-            "todo": <timedict> {
+            "TODO": <timedict>{
                 "Effort":	"22:00",
                 "CLOCKSUM":	"24:00"
-            }
+            }, ...
         }
+        .subtask = [<task>, ...]
+
+    From this we can collec
 
     """
     def __init__( self, state, description, times=None ):
@@ -231,6 +237,7 @@ def parse_tasks( lines ):
     task is added as a sub-task.  If less or equal, the (task, leval)
     is yielded and the parse ends.
     """
+    # Scan and discard lines 'til we find the beginning of an org-table
     found			= False
     for line in lines:
         if line.startswith("#+BEGIN:"):
@@ -239,11 +246,12 @@ def parse_tasks( lines ):
     if not found:
         raise Exception("No org-mode table found")
 
+    # Parse column names, discard separator |---|
     line			= next( lines )
     cols			= list( c for c in map( string.strip, line.split( "|" )) if c )
-    print "parse_tasks: columns %r" % ( cols )
-    next( lines ) # discard separator |---|
+    next( lines )
 
+    # Parse records, yielding tasks, 'til end of org-table
     refirst			= re.compile( r"\s* \| \s* ( \*+ ) \s* ( \w+ )", re.VERBOSE )
     revalue			= re.compile( r"\s* ( [^|]* ) \|", re.VERBOSE )
     for line in lines:
@@ -255,7 +263,6 @@ def parse_tasks( lines ):
             assert line.startswith( "#+END" )
             break
 
-        print "parse_tasks: Begins: %s" % ( repr( match.groups() ))
         stars, state		= match.groups()
         pos			= match.end()
 
@@ -279,6 +286,10 @@ def parse_tasks( lines ):
 
 
 def parse_task_heirarchy( lines ):
+    """
+    Produce a task heirarchy from a sequence of (task, level), correctly
+    making sub-tasks a child of the correct parent task.  Return the root task.
+    """
     stack		= []
     for tsk, lvl in parse_tasks( lines ):
         assert lvl > 0
@@ -308,7 +319,7 @@ def parse_task_heirarchy( lines ):
 
 
 def project_data_parse( data, project, style ):
-    """Return the parse org-mode project statistics data for one
+    """Return the parsed org-mode project statistics data for one
     project, from the supplied data.
 
     Searches each blob for an org-mode table like:
@@ -337,10 +348,40 @@ def project_data_parse( data, project, style ):
 
     results["project"]		= project
     results["style"]		= style
+    results["list"]		= []
+
+    tasks			= []
+
+    # Traverse the (from oldest to newest) list, collecting the
+    # differences between each.
     for blob in data[project]:
-        #tbl			=
-        pass
-    # WORKING HERE
+        tsk			= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
+        print tsk.display()
+        rec			= {}
+        tot, our, sub		= tsk.totals()
+
+        todo			= timedict(int)
+        done			= timedict(int)
+        full			= timedict(int)
+        for k,v in tot.iteritems():
+            full               += v
+            if k in ( "TODO", "NEXT" ):
+                todo           += v
+            elif k in ( "DONE" ):
+                done           += v
+            else:
+                print "Unhandled task state: %s: %s" % ( k, repr( v ))
+
+
+        todo_txt		= dict( reversed( todo ))
+        done_txt		= dict( reversed( done ))
+        full_txt		= dict( reversed( full ))
+        rec["total#"]		= full["Effort"]
+        rec["total"]		= full_txt["Effort"]
+        rec["remaining"]	= todo_txt["Effort"]
+        rec["remaining#"]	= todo["Effort"]
+        results["list"].append( rec )
+
     return results
 
 def deduce_encoding( available, environ, accept=None ):
@@ -404,8 +445,6 @@ def deduce_encoding( available, environ, accept=None ):
                     accept	= avail
     return accept
 
-def data_parse_stats( proj, data ):
-    return {"hi": "there"}
 
 def http_exception( framework, status, message ):
     """Return an exception appropriate for the given web framework,
@@ -533,12 +572,12 @@ def data_request( repository, project, path,
     # information: based on the actual amount of effort applied, what
     # is the remaining effort that will be required to complete the
     # project.
-    proj, style		= None, None
-    hexsha, data	= None, None
+    proj, style			= None, None
+    hexsha, data		= None, None
     try:
-        terms		= path.split( "/" )
+        terms			= path.split( "/" )
         assert 1 <= len( terms ) <= 2
-        proj		= terms[0]
+        proj			= terms[0]
 
         try:
             hexsha, data	= project_data( repository, [ proj ])
@@ -548,11 +587,11 @@ def data_request( repository, project, path,
         if proj not in data.keys():
             raise http_exception( framework, 404, "Unknown project: %s" % ( proj ))
         if len( terms ) > 1:
-            style	= terms[1]
+            style		= terms[1]
             if style not in [ "sprint", "elapsed", "effort" ]:
                 raise Exception( "Unknown style for project '%s': %s" % ( proj, style ))
         else:
-            style	= "effort"
+            style		= "effort"
     except Exception, e:
         # Invalid project/style requested.  Return 404 Not Found
         raise http_exception( framework, 404, e.message )
@@ -562,29 +601,30 @@ def data_request( repository, project, path,
     if data_request.hexsha != hexsha:
         data_request_hexsha	= hexsha
         data_request.cache	= {}
-    stats		= data_request.cache.get( proj, None )
+    stats			= data_request.cache.get( proj, None )
     if not stats:
-        stats           = project_data_parse( data, proj )
+        stats                   = project_data_parse( data, proj, style )
         data_request.cache[proj]= stats
 
-    response		= None
+    response			= None
     if accept == "application/json":
-        response	= json.dumps( stats )
+        response		= json.dumps( stats, indent=4 )
 
     elif accept == "text/html":
         pass
 
     else:
         # Invalid encoding requested.  Return appropriate 406 Not Acceptable
-        message		=  "Invalid encoding: %s, for Accept: %s" % (
+        message			=  "Invalid encoding: %s, for Accept: %s" % (
             accept, environ.get( "HTTP_ACCEPT", "*.*" ))
         raise http_exception( framework, 406, message )
 
     return accept, response
 
 # Initial cache for data_request function
-data_request.hexsha	= None
-data_request.cache	= None
+data_request.hexsha		= None
+data_request.cache		= None
+
 
 if __name__ == "__main__":
 
