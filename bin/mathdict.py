@@ -54,8 +54,8 @@ class mathdict( collections.defaultdict ):
             return self
         raise NotImplementedError()
     def __add__( self, rhs ):
-        """<mathdict> + <mathdict>"""
-        if isinstance( rhs, mathdict ):
+        """<mathdict> + [<mathdict>, (k,v)]"""
+        if isinstance( rhs, mathdict ) or isinstance( rhs, tuple ):
             res			= self.__class__(self.default_factory)
             res                += self
             res                += rhs
@@ -63,6 +63,7 @@ class mathdict( collections.defaultdict ):
         raise NotImplementedError()
     def __radd__( self, lhs ):
         """? += <mathdict> -- Not Implemented"""
+        raise NotImplementedError()
 
     def __isub__( self, rhs ):
         """<mathdict> -= [<mathdict>, (k,v)]"""
@@ -82,8 +83,8 @@ class mathdict( collections.defaultdict ):
             return self
         raise NotImplementedError()
     def __sub__( self, rhs ):
-        """<mathdict> - <mathdict>"""
-        if isinstance( rhs, mathdict ):
+        """<mathdict> - [<mathdict>, (k,v)]"""
+        if isinstance( rhs, mathdict ) or isinstance( rhs, tuple ):
             res			= self.__class__(self.default_factory)
             res                += self
             res                -= rhs
@@ -91,6 +92,7 @@ class mathdict( collections.defaultdict ):
         raise NotImplementedError()
     def __rsub__( self, lhs ):
         """? -= <mathdict> -- Not Implemented"""
+        raise NotImplementedError()
 
     def __imul__( self, rhs ):
         """<mathdict> *= [<mathdict>, (k,v)]"""
@@ -110,8 +112,8 @@ class mathdict( collections.defaultdict ):
             return self
         raise NotImplementedError()
     def __mul__( self, rhs ):
-        """<mathdict> * <mathdict>"""
-        if isinstance( rhs, mathdict ):
+        """<mathdict> * [<mathdict>, (k,v)]"""
+        if isinstance( rhs, mathdict ) or isinstance( rhs, tuple ):
             res			= self.__class__(self.default_factory)
             res                += self
             res                *= rhs
@@ -119,6 +121,7 @@ class mathdict( collections.defaultdict ):
         raise NotImplementedError()
     def __rmul__( self, lhs ):
         """? *= <mathdict> -- Not Implemented"""
+        raise NotImplementedError()
 
     def __idiv__( self, rhs ):
         """<mathdict> /= [<mathdict>, (k,v)]"""
@@ -137,9 +140,9 @@ class mathdict( collections.defaultdict ):
                 self           /= i
             return self
         raise NotImplementedError()
-    def __mul__( self, rhs ):
-        """<mathdict> / <mathdict>"""
-        if isinstance( rhs, mathdict ):
+    def __div__( self, rhs ):
+        """<mathdict> / [<mathdict>, (k,v)]"""
+        if isinstance( rhs, mathdict ) or isinstance( rhs, tuple ):
             res			= self.__class__(self.default_factory)
             res                += self
             res                /= rhs
@@ -147,6 +150,7 @@ class mathdict( collections.defaultdict ):
         raise NotImplementedError()
     def __rdiv__( self, lhs ):
         """? /= <mathdict> -- Not Implemented"""
+        raise NotImplementedError()
 
 
 class timedict( mathdict ):
@@ -167,7 +171,11 @@ class timedict( mathdict ):
     def _from_hms( self, timespec ):
         multiplier		= 60 * 60
         seconds			= 0
-
+        negative		= False
+        timespec                = timespec.strip()
+        if timespec.startswith( "-" ):
+            timespec		= timespec[1:]
+            negative		= True
         for segment in timespec.split( ":" ):
             assert multiplier >= 1  # If reaches 0, too many segments!
             if segment:
@@ -177,14 +185,17 @@ class timedict( mathdict ):
                 value		= self.default_factory()
             if multiplier      <= 60:
                 assert value < 60
-            seconds    += value * multiplier
+            seconds            += value * multiplier
             multiplier         /= 60
-        return seconds
+        return seconds if not negative else -seconds
 
     def _into_hms( self, seconds ):
         multiplier		= 60 * 60
         timespec                = []
-
+        negative		= ""
+        if seconds < 0:
+            seconds		= abs( seconds )
+            negative		= "-"
         timespec.append( "%d" % ( seconds / ( 60*60 )))
         seconds                %= 60*60
         timespec.append( "%02d" % ( seconds / 60 ))
@@ -195,12 +206,12 @@ class timedict( mathdict ):
             if seconds:
                 # Must be float, now < 1.0; turns 0.123000 into .123
                 timespec[-1]   += ("%f" % ( seconds )).strip( "0" )
-        return ":".join( timespec )
+        return negative + ":".join( timespec )
 
     def __iadd__( self, rhs ):
         """Handles:
 
-            <timedict> += ( key, "HH:MM" )
+            <timedict> <op>= ( key, "HH:MM" )
 
         tuples specially; passes everything else along to mathdict.
         For "adding" regular dicts full of textual timespecs to a
@@ -212,6 +223,24 @@ class timedict( mathdict ):
             self[rhs[0]]       += self._from_hms( rhs[1] )
             return self
         return mathdict.__iadd__( self, rhs ) # Otherwise, base mathdict handles
+
+    def __isub__( self, rhs ):
+        if isinstance( rhs, tuple ) and isinstance( rhs[1], basestring ):
+            self[rhs[0]]       -= self._from_hms( rhs[1] )
+            return self
+        return mathdict.__isub__( self, rhs ) # Otherwise, base mathdict handles
+
+    def __imul__( self, rhs ):
+        if isinstance( rhs, tuple ) and isinstance( rhs[1], basestring ):
+            self[rhs[0]]       *= self._from_hms( rhs[1] )
+            return self
+        return mathdict.__imul__( self, rhs ) # Otherwise, base mathdict handles
+
+    def __idiv__( self, rhs ):
+        if isinstance( rhs, tuple ) and isinstance( rhs[1], basestring ):
+            self[rhs[0]]       /= self._from_hms( rhs[1] )
+            return self
+        return mathdict.__idiv__( self, rhs ) # Otherwise, base mathdict handles
 
     def __reversed__( self ):
         """Returns an iterator over sorted (key, value) data, reverted

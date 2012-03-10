@@ -119,8 +119,8 @@ project_data.result		= None
 
 
 class task( object ):
-    """
-    Each task.data is of the form:
+    """Represents a single task in a tree of tasks/subtasks.  Each
+    task is of the form:
 
         .description = "Project burndown <2012-03-02 Fri>"
         .state = "TODO"
@@ -128,11 +128,13 @@ class task( object ):
             "TODO": <timedict>{
                 "Effort":	"22:00",
                 "CLOCKSUM":	"24:00"
-            }, ...
+            },
+            "DONE": <timedict>{...
         }
         .subtask = [<task>, ...]
 
-    From this we can collec
+    From this we can collect a breakdown of effort estimates and
+    actual clocked time, between all the different tasks states.
 
     """
     def __init__( self, state, description, times=None ):
@@ -260,7 +262,7 @@ def parse_tasks( lines ):
         pos			= 0
         match			= refirst.match( line, pos=pos )
         if match is None:
-            assert line.startswith( "#+END" )
+            assert line.startswith( "#+END" ), "org-mode table must end with #+END, not: '%s'" % line
             break
 
         stars, state		= match.groups()
@@ -362,24 +364,47 @@ def project_data_parse( data, project, style ):
 
         todo			= timedict(int)
         done			= timedict(int)
+        gone			= timedict(int)
         full			= timedict(int)
         for k,v in tot.iteritems():
-            full               += v
-            if k in ( "TODO", "NEXT" ):
+            if k in ( "TODO", "NEXT", "HOLD", "WAITING", "PHONE" ):
+                full           += v
                 todo           += v
             elif k in ( "DONE" ):
+                # Items
+                full           += v
                 done           += v
+            elif k in ( "CANCELLED" ):
+                # Items removed from project.  Both Effort estimate
+                # (and clocked time) no longer appear in the 'full'
+                # project data, so are effectively subtracted from any
+                # others "added".
+                gone           += v
             else:
                 print "Unhandled task state: %s: %s" % ( k, repr( v ))
 
-
         todo_txt		= dict( reversed( todo ))
         done_txt		= dict( reversed( done ))
+        gone_txt		= dict( reversed( gone ))
         full_txt		= dict( reversed( full ))
-        rec["total#"]		= full["Effort"]
         rec["total"]		= full_txt["Effort"]
-        rec["remaining"]	= todo_txt["Effort"]
-        rec["remaining#"]	= todo["Effort"]
+        rec["total#"]		= full["Effort"]
+        rec["remain"]		= todo_txt["Effort"]
+        rec["remain#"]		= todo["Effort"]
+
+        old			= results["list"][-1] if results["list"] else None
+        if old:
+            # Compute differences between this and older record, using
+            # timedict math.
+            print "Found %s full vs. %s in older record" % ( repr( full_txt ), old["total#"])
+            add			= full - ("Effort", old["total#"])
+            add_txt		= dict( reversed( add ))
+            rec["added"]	= add_txt["Effort"]
+            rec["added#"]	= add["Effort"]
+        else:
+            rec["added"]	= "0:00"
+            rec["added#"]	= 0
+
         results["list"].append( rec )
 
     return results
