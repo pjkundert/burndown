@@ -21,6 +21,7 @@ import argparse
 import cgi
 import json
 import re
+import socket
 import string
 import textwrap
 import time
@@ -498,6 +499,13 @@ def http_exception( framework, status, message ):
     return Exception( "%d %s" % ( status, message ))
 
 
+#
+# URL request handlers
+#
+#     projects_request	-- Returns all available projects, and styles
+#     data_request	-- Returns statistics for one project
+#
+
 def projects_request( repository, project,
                       queries=None, environ=None, accept=None,
                       framework=None ):
@@ -554,7 +562,12 @@ def projects_request( repository, project,
                                   </pre>"""
 
         # And display the available projects, and styles with URLs
-        # linking to project data
+        # linking to project data (adding .json to force JSON format
+        # from via the browser, which doesn't normally send:
+        #
+        #     Accept: application/json
+        #
+        # in the header.
         for proj in content:
             html               += """
                                   <div class=project>%(project)s:""" % proj
@@ -563,7 +576,7 @@ def projects_request( repository, project,
                     "project":	proj["project"],
                     "style":	style,
                 }
-                one["url"]	= cgi.escape( "/api/data/%(project)s/%(style)s" % one,
+                one["url"]	= cgi.escape( "/api/data/%(project)s/%(style)s.json" % one,
                                               quote=True )
                 html           += """
                                     <div class=projectlink><a href="%(url)s">%(style)s</a></div>""" % one
@@ -650,7 +663,19 @@ def data_request( repository, project, path,
 data_request.hexsha		= None
 data_request.cache		= None
 
-
+#
+# Web Server
+#
+#     When executed as an command, invokes a webserver (by default
+# using web.py, running on all interfaces, port 8080).  Responds to
+# Accept: application/json in the HTTP request header, and also to
+# appending ".json" to any URL, to force JSON response.  Run:
+#
+#     orgserver.py ~/org project another
+#
+# to parse and serve org-mode data from the Git repository there, for
+# projects "project" and "another".
+#
 if __name__ == "__main__":
 
     # Parse args
@@ -659,9 +684,13 @@ if __name__ == "__main__":
         epilog = "" )
 
     parser.add_argument( '-s', '--server',
-                         default="web.py", help="Webserver framework to use (web.py, itty)" )
+                         default="web.py",
+                         help="Webserver framework to use (web.py, itty)" )
     parser.add_argument( '-a', '--address',
-                         default="0.0.0.0", help="Default interface[:port] to bind to (default: all, port 80)")
+                         default="0.0.0.0:8080",
+                         help="Default interface[:port] to bind to (default: all, port 80)")
+    parser.add_argument( '-r', '--redundant', action="store_true",
+                         help="If server is already bound to port, fail quietly" )
     parser.add_argument( 'repository', nargs=1 )
     parser.add_argument( 'project', nargs="+" )
     args			= parser.parse_args()
@@ -748,10 +777,25 @@ if __name__ == "__main__":
 
         import web
         urls			= (
+            "/",				"home",
             "/api/projects.json",		"projects",
             "/api/projects",			"projects",
             "/api/data/(.*)",			"data",		# Passes remainder as argument
         )
+
+        class home:
+            def GET( self ):
+                """Forward to an appropriate start page.  Detect if
+                behind a proxy, and use the original forwarded
+                host.
+                """
+                # print json.dumps(web.ctx, skipkeys=True, default=repr, indent=4,)
+                proxy		= web.ctx.environ.get( "HTTP_X_FORWARDED_HOST", "" )
+                if proxy:
+                    proxy	= "http://" + proxy + "/"
+                target		= proxy + "api/projects"
+                # print "Redirect / to %s" % ( target )
+                raise web.Redirect( target )
 
         class projects:
             def GET( self ):
@@ -772,6 +816,7 @@ if __name__ == "__main__":
                 content, response = projects_request( args.repository[0], args.project,
                                                       queries=queries, environ=environ,
                                                       accept=accept, framework=web )
+                web.header( "Cache-Control", "no-cache" )
                 web.header( "Content-Type", content )
                 return response
 
@@ -787,14 +832,21 @@ if __name__ == "__main__":
                 content, response = data_request( args.repository[0], args.project, path,
                                                     queries=queries, environ=environ,
                                                     accept=accept, framework=web )
+                web.header( "Cache-Control", "no-cache" )
                 web.header( "Content-Type", content )
                 return response
 
         # Get the required classes from the local namespace.
         # The iface:port must always passed on argv[1] to use
         # app.run(), so use lower-level interface.
-        app			= web.application( urls, locals() )
-        web.httpserver.runsimple( app.wsgifunc(), address )
+        try:
+            app			= web.application( urls, locals() )
+            web.httpserver.runsimple( app.wsgifunc(), address )
+        except socket.error:
+            if not args.redundant:
+                # Ignore errors binding on socket; drop through
+                raise
+            print "Cannot bind to %s; org server probably already running" % args.address
 
     elif args.server == "itty":
         """The itty webserver is a very small Python native webserver
@@ -872,6 +924,10 @@ if __name__ == "__main__":
         #     Instead of just returning the response directly and
         # taking the default headers, encode the supplied
         # Content-Type.
+        @itty.get( "/" )
+        def index( request ):
+            raise itty.Redirect( "api/projects" )
+
         @itty.get( "/api/projects" )
         def index( request ):
             """
@@ -882,7 +938,10 @@ if __name__ == "__main__":
             content, response	= projects_request( args.repository[0], args.project,
                                                     queries=queries, environ=environ,
                                                     framework=itty )
-            return itty.Response( response, headers=[("Content-Type", content)])
+            return itty.Response( response, headers=[
+                ("Cache-Control", "no-cache"),
+                ("Content-Type", content)
+            ])
 
         @itty.get( "/api/projects.json" )
         def index( request ):
@@ -894,7 +953,10 @@ if __name__ == "__main__":
             content, response	= projects_request( args.repository[0], args.project,
                                                     queries=queries, environ=environ,
                                                     accept="application/json", framework=itty )
-            return itty.Response( response, headers=[("Content-Type", content)])
+            return itty.Response( response, headers=[
+                ("Cache-Control", "no-cache"),
+                ("Content-Type", content)
+            ])
 
         itty.run_itty( host=address[0], port=address[1] )
 

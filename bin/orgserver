@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# orgserver
+#
+#     Start the org-mode data server, on the specified org data Git
+# repository $ORG, with the specified projects $PRO.  Attempts to
+# refresh the org data with "git pull" .
+#
+#     Can be run with a cron job to regularly refresh the org data,
+# and attempt to restart the server.
+#
+
+
+export PYTHONPATH=/usr/local/lib/python2.7:${PYTHONPATH}
+
+DIR=${0%/*}
+OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
+ORG=~/org
+PRO=burndown
+
+( cd $ORG && git pull -q origin master )
+
+CMD="$DIR/orgserver.py $OPT $ORG $PRO"
+
+echo $CMD
+$CMD
