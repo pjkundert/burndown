@@ -11,14 +11,14 @@
 #
 
 
-export PYTHONPATH=/usr/local/lib/python2.7:${PYTHONPATH}
+export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 
 DIR=${0%/*}
 OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
 ORG=~/org
 PRO=burndown
 
-( cd $ORG && git pull -q origin master )
+( cd $ORG && git pull origin master )
 
 CMD="$DIR/orgserver.py $OPT $ORG $PRO"
 
