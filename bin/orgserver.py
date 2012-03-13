@@ -267,6 +267,7 @@ def parse_tasks( lines ):
             break
 
         stars, state		= match.groups()
+        state			= state[0:4] # Limit states to 4 chars max
         pos			= match.end()
 
         # ...  Project burndown <2012-03-02 Fri>          |
@@ -360,9 +361,9 @@ def project_data_parse( data, project, style ):
     # Traverse the (from oldest to newest) list, collecting the
     # differences between each.  Ignore duplicates, cache any blobs
     # parsed.
+    rec, old			= None, None
+    stats, prior		= None, None
     for blob in data[project]:
-        old			= results["list"][-1] if results["list"] else None
-
         if blob.hexsha in cache:
             stats		= cache[blob.hexsha] # May be None (no data found)
         else:
@@ -372,11 +373,17 @@ def project_data_parse( data, project, style ):
                 stats["task"]	= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
                 print stats["task"].display()
 
-                datematch	= re.search( "<([0-9-]*)[^>]*>", stats["task"].description )
-                if not datematch:
+                match		= re.search( r"<([0-9-]*)[^>]*>", stats["task"].description )
+                if match is None:
                     raise Exception( "No date found in task: %s" % stats["task"].description )
-                stats["date"]	= datematch.group(1)
+                stats["date"]	= match.group( 1 )
                 stats["date#"]	= time.mktime( time.strptime( stats["date"], "%Y-%m-%d" ))
+
+                match		= re.search( r"[Ss]print\s+([0-9-]+)>", stats["task"].description )
+                sprint		= 0
+                if match is not None:
+                    sprint	= int( match.group( 1 ))
+                stats["sprint"]	= sprint
             except Exception, e:
                 print "No Task Data: %s" % ( e )
                 stats           = None
@@ -385,65 +392,94 @@ def project_data_parse( data, project, style ):
             print "Commit contains blob with no tasks data; skipping"
             continue
 
+        if old and blob.hexsha == old["blob"]:
+            print "Commit contains same blob as last; skipping"
+            continue # same data in this commit!  Next.
+
+        # We have a valid task!  Create the summary rec for the JSON
+        # result data list.
         rec			= {}
         rec["blob"]		= blob.hexsha
         rec["date"]		= stats["date"]
         rec["date#"]		= stats["date#"]
-        if old and rec["blob"] == old["blob"]:
-            print "Commit contains same blob as last; skipping"
-            continue # same data in this commit!  Next.
 
-        if "todo" not in stats:
-            todo                = stats["todo"] = timedict(int)
-            done                = stats["done"] = timedict(int)
-            gone                = stats["gone"] = timedict(int)
-            full                = stats["full"] = timedict(int)
+        dicts			= [		# (first is most likely to contain *all* columns!)
+            "total", "project",			# Overall sums
+            "todo", "done", "canc",		# Raw tasks state buckets
+            "added", "removed", "growth"	# Differences
+        ]
+        if dicts[0] not in stats:
+            # We haven't yet computed the cached stats for this blob.
+            #
+            # total     -- all tasks.
+            # todo	-- all incomplete tasks.  Tasks left to do.
+            # done	-- all complete tasks.  Tasks finished.
+            # project   -- all non-cancelled tasks.  Delivered
+            # added	-- New Tasks added to project this period. (delta total)
+            # removed   -- Tasks removed from project this period. (delta canc)
+            # growth	-- Net Project added - removed this period.
+            #
+            stats["todo"]       = timedict(int)
+            stats["done"]       = timedict(int)
+            stats["canc"]       = timedict(int)
 
             tot, our, sub	= stats["task"].totals()
 
             for k,v in tot.iteritems():
-                if k in ( "TODO", "NEXT", "HOLD", "WAITING", "PHONE" ):
-                    full       += v
-                    todo       += v
-                elif k in ( "DONE" ):
-                    # Items
-                    full       += v
-                    done       += v
-                elif k in ( "CANCELLED" ):
+                if k in ("DONE"):
+                    stats["done"] += v
+                elif k in ("CANC"):
                     # Items removed from project.  Both Effort estimate
-                    # (and clocked time) no longer appear in the 'full'
+                    # (and clocked time) no longer appear in the 'total'
                     # project data, so are effectively subtracted from any
                     # others "added".
-                    gone       += v
-                else:
-                    print "Unhandled task state: %s: %s" % ( k, repr( v ))
-        else:
-            todo                = stats["todo"]
-            done                = stats["done"]
-            gone                = stats["gone"]
-            full                = stats["full"]
+                    stats["canc"] += v
+                else: # ("TODO", "NEXT", "HOLD", "WAIT", "PHON", ...)
+                    stats["todo"] += v
 
-        todo_txt		= dict( reversed( todo ))
-        done_txt		= dict( reversed( done ))
-        gone_txt		= dict( reversed( gone ))
-        full_txt		= dict( reversed( full ))
-        rec["total"]		= full_txt["Effort"]
-        rec["total#"]		= full["Effort"]
-        rec["remain"]		= todo_txt["Effort"]
-        rec["remain#"]		= todo["Effort"]
+            stats["project"]	= stats["todo"] + stats["done"]
+            stats["total"]	= stats["project"] + stats["canc"]
+            if prior:
+                stats["added"]	= stats["total"] - prior["total"]
+                stats["removed"]= stats["canc"]  - prior["canc"]
+                stats["growth"] = stats["added"] - stats["removed"]
 
-        if old:
-            # Compute differences between this and older record
-            print "Found %s full vs. %s in older record" % ( repr( full_txt ), old["total#"])
-            add			= full - ("Effort", old["total#"])
-            add_txt		= dict( reversed( add ))
-            rec["added"]	= add_txt["Effort"]
-            rec["added#"]	= add["Effort"]
-        else:
-            rec["added"]	= "0:00"
-            rec["added#"]	= 0
+            # If there were no tasks in the given state, ensure that
+            # the summation timedict at least have zero entries for
+            # all columns.  Assumes total will have all columns...
+            for d in dicts:
+                for k in stats[dicts[0]].keys():
+                    if d not in stats:
+                        stats[d]	= timedict(int)
+                    if k not in stats[d]:
+                        stats[d]      += (k, 0)
+
+        # Turn all the stats <timedict> back into textual time specs,
+        # using their custom __reversed__ method.
+        texts			= {}
+        for d in dicts:
+            texts[d]		= dict( reversed( stats[d] ))
+
+        # The "est" Estimate (the unfortunately named Effort column)
+        # deals in the total number of story points (estimated in
+        # hours, roughly) for all tasks.  Map some known columsn to
+        # more correct names.
+        mapping			= {
+            "Effort":   "estimated",
+            "CLOCKSUM":	"actual",
+        }
+        for i in stats[dicts[0]].keys():
+            n                   = mapping.get( i, i )
+            rec[n]			= {}
+            for d in dicts:
+                rec[n][d]		= texts[d][i]
+                rec[n][d+"#"]		= stats[d][i]
 
         results["list"].append( rec )
+
+        # Remember this round's task's rec/stats in old/prior, to
+        # compute the next round's differences.
+        old, prior		= rec, stats
 
     return results
 
@@ -578,7 +614,7 @@ def projects_request( repository, project,
 
     if accept == "application/json":
         # JSON
-        response		= json.dumps( content, indent=4 )
+        response		= json.dumps( content, sort_keys=True, indent=4 )
 
     elif accept == "text/html":
         # HTML5.  Yes, this minimal markup is cross-browser standards
@@ -687,7 +723,7 @@ def data_request( repository, project, path,
 
     response			= None
     if accept == "application/json":
-        response		= json.dumps( stats, indent=4 )
+        response		= json.dumps( stats, sort_keys=True, indent=4 )
 
     elif accept == "text/html":
         pass
