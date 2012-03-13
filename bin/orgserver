@@ -16,7 +16,7 @@ export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 DIR=${0%/*}
 OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
 ORG=~/org
-PRO=burndown
+PRO="burndown port"
 
 ( cd $ORG && git pull origin master )
 

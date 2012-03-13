@@ -289,8 +289,7 @@ def parse_tasks( lines ):
 
 
 def parse_task_heirarchy( lines ):
-    """
-    Produce a task heirarchy from a sequence of (task, level), correctly
+    """Produce a task heirarchy from a sequence of (task, level), correctly
     making sub-tasks a child of the correct parent task.  Return the root task.
     """
     stack		= []
@@ -345,7 +344,12 @@ def project_data_parse( data, project, style ):
     state-changes of tasks.  We'll create a tree of task objects,
     containing roll-up statistics of all of the sub-tasks in each
     state.
+
+    Cache the raw task statistical data, to avoid having to reparse
+    it.  The same blog may appear in many consecutive commits...
     """
+    # cache[blob.hexsha] == {"todo": {}, ...} or None.
+    cache			= project_data_parse.cache
 
     results			= {}
 
@@ -353,36 +357,71 @@ def project_data_parse( data, project, style ):
     results["style"]		= style
     results["list"]		= []
 
-    tasks			= []
-
     # Traverse the (from oldest to newest) list, collecting the
-    # differences between each.
+    # differences between each.  Ignore duplicates, cache any blobs
+    # parsed.
     for blob in data[project]:
-        tsk			= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
-        print tsk.display()
-        rec			= {}
-        tot, our, sub		= tsk.totals()
+        old			= results["list"][-1] if results["list"] else None
 
-        todo			= timedict(int)
-        done			= timedict(int)
-        gone			= timedict(int)
-        full			= timedict(int)
-        for k,v in tot.iteritems():
-            if k in ( "TODO", "NEXT", "HOLD", "WAITING", "PHONE" ):
-                full           += v
-                todo           += v
-            elif k in ( "DONE" ):
-                # Items
-                full           += v
-                done           += v
-            elif k in ( "CANCELLED" ):
-                # Items removed from project.  Both Effort estimate
-                # (and clocked time) no longer appear in the 'full'
-                # project data, so are effectively subtracted from any
-                # others "added".
-                gone           += v
-            else:
-                print "Unhandled task state: %s: %s" % ( k, repr( v ))
+        if blob.hexsha in cache:
+            stats		= cache[blob.hexsha] # May be None (no data found)
+        else:
+            try:
+                print "Parsing blob %s: %s" % ( blob.hexsha, blob.name )
+                stats           = {}
+                stats["task"]	= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
+                print stats["task"].display()
+
+                datematch	= re.search( "<([0-9-]*)[^>]*>", stats["task"].description )
+                if not datematch:
+                    raise Exception( "No date found in task: %s" % stats["task"].description )
+                stats["date"]	= datematch.group(1)
+                stats["date#"]	= time.mktime( time.strptime( stats["date"], "%Y-%m-%d" ))
+            except Exception, e:
+                print "No Task Data: %s" % ( e )
+                stats           = None
+            cache[blob.hexsha]	= stats
+        if stats is None:
+            print "Commit contains blob with no tasks data; skipping"
+            continue
+
+        rec			= {}
+        rec["blob"]		= blob.hexsha
+        rec["date"]		= stats["date"]
+        rec["date#"]		= stats["date#"]
+        if old and rec["blob"] == old["blob"]:
+            print "Commit contains same blob as last; skipping"
+            continue # same data in this commit!  Next.
+
+        if "todo" not in stats:
+            todo                = stats["todo"] = timedict(int)
+            done                = stats["done"] = timedict(int)
+            gone                = stats["gone"] = timedict(int)
+            full                = stats["full"] = timedict(int)
+
+            tot, our, sub	= stats["task"].totals()
+
+            for k,v in tot.iteritems():
+                if k in ( "TODO", "NEXT", "HOLD", "WAITING", "PHONE" ):
+                    full       += v
+                    todo       += v
+                elif k in ( "DONE" ):
+                    # Items
+                    full       += v
+                    done       += v
+                elif k in ( "CANCELLED" ):
+                    # Items removed from project.  Both Effort estimate
+                    # (and clocked time) no longer appear in the 'full'
+                    # project data, so are effectively subtracted from any
+                    # others "added".
+                    gone       += v
+                else:
+                    print "Unhandled task state: %s: %s" % ( k, repr( v ))
+        else:
+            todo                = stats["todo"]
+            done                = stats["done"]
+            gone                = stats["gone"]
+            full                = stats["full"]
 
         todo_txt		= dict( reversed( todo ))
         done_txt		= dict( reversed( done ))
@@ -393,10 +432,8 @@ def project_data_parse( data, project, style ):
         rec["remain"]		= todo_txt["Effort"]
         rec["remain#"]		= todo["Effort"]
 
-        old			= results["list"][-1] if results["list"] else None
         if old:
-            # Compute differences between this and older record, using
-            # timedict math.
+            # Compute differences between this and older record
             print "Found %s full vs. %s in older record" % ( repr( full_txt ), old["total#"])
             add			= full - ("Effort", old["total#"])
             add_txt		= dict( reversed( add ))
@@ -409,6 +446,10 @@ def project_data_parse( data, project, style ):
         results["list"].append( rec )
 
     return results
+
+project_data_parse.cache	= {}
+
+
 
 def deduce_encoding( available, environ, accept=None ):
     """Deduce acceptable encoding from HTTP Accept: header:
