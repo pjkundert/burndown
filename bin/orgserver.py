@@ -323,7 +323,7 @@ def parse_task_heirarchy( lines ):
 
 def project_data_parse( data, project, style ):
     """Return the parsed org-mode project statistics data for one
-    project, from the supplied data.
+    project, from the supplied data, with the specified x-axis style.
 
     Searches each blob for an org-mode table like:
 
@@ -362,39 +362,58 @@ def project_data_parse( data, project, style ):
     # differences between each.  Ignore duplicates, cache any blobs
     # parsed.
     rec, old			= None, None
-    stats, prior		= None, None
+    stats, prior, ahead		= None, None, None
     for blob in data[project]:
+        # Now: rec, stats contains last cycle's computed data
         if blob.hexsha in cache:
-            stats		= cache[blob.hexsha] # May be None (no data found)
+            ahead		= cache[blob.hexsha] # May be None (no data found)
         else:
             try:
                 print "Parsing blob %s: %s" % ( blob.hexsha, blob.name )
-                stats           = {}
-                stats["task"]	= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
-                print stats["task"].display()
+                ahead           = {}
+                ahead["task"]	= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
+                print ahead["task"].display()
 
-                match		= re.search( r"<([0-9-]*)[^>]*>", stats["task"].description )
+                match		= re.search( r"<([0-9-]*)[^>]*>", ahead["task"].description )
                 if match is None:
-                    raise Exception( "No date found in task: %s" % stats["task"].description )
-                stats["date"]	= match.group( 1 )
-                stats["date#"]	= time.mktime( time.strptime( stats["date"], "%Y-%m-%d" ))
+                    raise Exception( "No date found in task: %s" % ahead["task"].description )
+                ahead["date"]	= match.group( 1 )
+                ahead["date#"]	= time.mktime( time.strptime( ahead["date"], "%Y-%m-%d" ))
 
-                match		= re.search( r"[Ss]print\s+([0-9-]+)>", stats["task"].description )
+                match		= re.search( r"[Ss]print\s+([0-9-]+)>", ahead["task"].description )
                 sprint		= 0
                 if match is not None:
                     sprint	= int( match.group( 1 ))
-                stats["sprint"]	= sprint
+                ahead["sprint"]	= sprint
             except Exception, e:
                 print "No Task Data: %s" % ( e )
-                stats           = None
-            cache[blob.hexsha]	= stats
-        if stats is None:
+                ahead           = None
+            cache[blob.hexsha]	= ahead
+
+        # Now: rec, stats still contains last cycle's computed data;
+        # ahead contains this blob's task's data.
+
+        # This blob may need to be ignored for various reasons.
+        if ahead is None:
             print "Commit contains blob with no tasks data; skipping"
             continue
-
-        if old and blob.hexsha == old["blob"]:
+        if rec and blob.hexsha == rec["blob"]:
             print "Commit contains same blob as last; skipping"
-            continue # same data in this commit!  Next.
+            continue
+        if stats and ahead["date"] == stats["date"]:
+            # This record contains the same date as the last; must be
+            # a later commit on the same day.  Use its data instead;
+            # throw away the last record computed, and ensure we
+            # retain  the same old, prior for this round...
+            print "Commit contains same date as last; redoing"
+            results["list"]	= results["list"][:-1]
+            rec, stats		= old, prior
+
+        # Remember this round's task's rec/stats in old/prior, to
+        # compute the next round's differences.  Now safe to advance
+        # ahead to the stats just loaded.
+        old, prior		= rec, stats
+        stats			= ahead
 
         # We have a valid task!  Create the summary rec for the JSON
         # result data list.
@@ -405,8 +424,11 @@ def project_data_parse( data, project, style ):
 
         dicts			= [		# (first is most likely to contain *all* columns!)
             "total", "project",			# Overall sums
-            "todo", "done", "canc",		# Raw tasks state buckets
-            "added", "removed", "growth"	# Differences
+            "todo", "todoTotal",
+            "done", "doneTotal",		# Done since last, and sum total
+            "removed", "removedTotal",		# Existing tasks cancelled
+            "added", "addedTotal",		# New tasks added, and sum total
+            "delta", "deltaTotal",		# net change and total change
         ]
         if dicts[0] not in stats:
             # We haven't yet computed the cached stats for this blob.
@@ -419,40 +441,45 @@ def project_data_parse( data, project, style ):
             # removed   -- Tasks removed from project this period. (delta canc)
             # growth	-- Net Project added - removed this period.
             #
-            stats["todo"]       = timedict(int)
-            stats["done"]       = timedict(int)
-            stats["canc"]       = timedict(int)
+            stats["todoTotal"]    = timedict(int)
+            stats["doneTotal"]    = timedict(int)
+            stats["removedTotal"] = timedict(int)
 
             tot, our, sub	= stats["task"].totals()
 
             for k,v in tot.iteritems():
                 if k in ("DONE"):
-                    stats["done"] += v
+                    stats["doneTotal"] += v
                 elif k in ("CANC"):
                     # Items removed from project.  Both Effort estimate
                     # (and clocked time) no longer appear in the 'total'
                     # project data, so are effectively subtracted from any
                     # others "added".
-                    stats["canc"] += v
+                    stats["removedTotal"] += v
                 else: # ("TODO", "NEXT", "HOLD", "WAIT", "PHON", ...)
-                    stats["todo"] += v
+                    stats["todoTotal"] += v
 
-            stats["project"]	= stats["todo"] + stats["done"]
-            stats["total"]	= stats["project"] + stats["canc"]
+            stats["project"]	= stats["todoTotal"] + stats["doneTotal"]
+            stats["total"]	= stats["project"] + stats["removedTotal"]
             if prior:
-                stats["added"]	= stats["total"] - prior["total"]
-                stats["removed"]= stats["canc"]  - prior["canc"]
-                stats["growth"] = stats["added"] - stats["removed"]
+                stats["todo"]		= stats["todoTotal"]    - prior["todoTotal"]
+                stats["done"]		= stats["doneTotal"]    - prior["doneTotal"]
+                stats["added"]		= stats["total"]        - prior["total"]
+                stats["addedTotal"]     = stats["added"]	+ prior["addedTotal"]
+                stats["removed"]	= stats["removedTotal"] - prior["removedTotal"]
+                stats["delta"]          = stats["added"]        - stats["removed"]
+                stats["deltaTotal"]     = stats["delta"]	+ prior["deltaTotal"]
 
-            # If there were no tasks in the given state, ensure that
-            # the summation timedict at least have zero entries for
-            # all columns.  Assumes total will have all columns...
+            # If there were no results for a stat (eg. no tasks in the
+            # given state), ensure that the resultant timedict at
+            # least have zero entries for all known columns.  Assumes
+            # total (first item in 'dicts'') will have all columns...
             for d in dicts:
                 for k in stats[dicts[0]].keys():
                     if d not in stats:
-                        stats[d]	= timedict(int)
+                        stats[d]  = timedict(int)
                     if k not in stats[d]:
-                        stats[d]      += (k, 0)
+                        stats[d] += (k, 0)
 
         # Turn all the stats <timedict> back into textual time specs,
         # using their custom __reversed__ method.
@@ -466,7 +493,7 @@ def project_data_parse( data, project, style ):
         # more correct names.
         mapping			= {
             "Effort":   "estimated",
-            "CLOCKSUM":	"actual",
+            "CLOCKSUM":	"work",
         }
         for i in stats[dicts[0]].keys():
             n                   = mapping.get( i, i )
@@ -476,10 +503,6 @@ def project_data_parse( data, project, style ):
                 rec[n][d+"#"]		= stats[d][i]
 
         results["list"].append( rec )
-
-        # Remember this round's task's rec/stats in old/prior, to
-        # compute the next round's differences.
-        old, prior		= rec, stats
 
     return results
 
@@ -618,10 +641,13 @@ def projects_request( repository, project,
 
     if accept == "application/json":
         # JSON
-        response		= json.dumps( content, sort_keys=True, indent=4 )
+        response		= ""
         callback		= queries and queries.get( 'callback', "" ) or ""
         if callback:
-            response		= callback + "( " + response + " )"
+            response		= callback + "( "
+        response               += json.dumps( content, sort_keys=True, indent=4 )
+        if callback:
+            response           += " )"
     elif accept == "text/html":
         # HTML5.  Yes, this minimal markup is cross-browser standards
         # compliant (including the unquoted attributes!)
@@ -681,7 +707,7 @@ def data_request( repository, project, path,
                   framework=None ):
     """Return the project data specified by path:
 
-           <project>[/<style>]
+           .../<project>[/<style>]
 
     We'll parse the historical org-mode data, and cache it based on the
     """
@@ -699,26 +725,26 @@ def data_request( repository, project, path,
         terms			= path.split( "/" )
         assert 1 <= len( terms ) <= 2
         proj			= terms[0]
-
-        try:
-            hexsha, data	= project_data( repository, [ proj ])
-        except Exception, e:
-            raise http_exception( framework, 500,
-                                  "Project data bad: %s" % ( e.message ))
-        if proj not in data.keys():
-            raise http_exception( framework, 404, "Unknown project: %s" % ( proj ))
         if len( terms ) > 1:
             style		= terms[1]
             if style not in [ "sprint", "elapsed", "effort" ]:
                 raise Exception( "Unknown style for project '%s': %s" % ( proj, style ))
         else:
             style		= "effort"
+
+        try:
+            hexsha, data	= project_data( repository, [ proj ] )
+        except Exception, e:
+            raise http_exception( framework, 500,
+                                  "Project data bad: %s" % ( e.message ))
+        if proj not in data.keys():
+            raise http_exception( framework, 404, "Unknown project: %s" % ( proj ))
     except Exception, e:
         # Invalid project/style requested.  Return 404 Not Found
         raise http_exception( framework, 404, e.message )
 
     # hexsha updated, data[proj] available.  Check that our cached
-    # data still valid and/or exists, and collect if not.
+    # data still valid and/or exists, and go parse it if not.
     if data_request.hexsha != hexsha:
         data_request_hexsha	= hexsha
         data_request.cache	= {}
@@ -729,10 +755,13 @@ def data_request( repository, project, path,
 
     response			= None
     if accept == "application/json":
-        response		= json.dumps( stats, sort_keys=True, indent=4 )
+        response		= ""
         callback		= queries and queries.get( 'callback', "" ) or ""
         if callback:
-            response		= callback + "( " + response + " )"
+            response		= callback + "( "
+        response               += json.dumps( stats, sort_keys=True, indent=4 )
+        if callback:
+            response           += " )"
 
     elif accept == "text/html":
         pass
@@ -864,8 +893,8 @@ if __name__ == "__main__":
         import web
         urls			= (
             "/",				"home",
-            "/api/projects.json",		"projects",
-            "/api/projects",			"projects",
+            "/api/projects.json/?",		"projects",
+            "/api/projects/?",			"projects",
             "/api/data/(.*)",			"data",		# Passes remainder as argument
         )
 
@@ -911,6 +940,8 @@ if __name__ == "__main__":
                 environ		= web.ctx.environ
                 queries		= web.input()
                 accept		= None
+                if path.endswith( "/" ):
+                    path	= path[:-1]
                 if path.endswith( ".json" ):
                     accept	= "application/json"
                     path	= path[:-5] # Clip off .json
