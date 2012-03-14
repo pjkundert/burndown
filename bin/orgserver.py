@@ -604,6 +604,10 @@ def projects_request( repository, project,
     # TODO: Deduce available graph styles from data (eg. see if sprint specified)
     styles		= [ "sprint", "elapsed", "effort" ]
 
+    # GET Qeury options
+    #     callback: function	-- wrap JSON in a function call
+    print "project_request: queries == %r" % ( queries )
+
     content		= [
         {
             "project":	name,
@@ -615,7 +619,9 @@ def projects_request( repository, project,
     if accept == "application/json":
         # JSON
         response		= json.dumps( content, sort_keys=True, indent=4 )
-
+        callback		= queries and queries.get( 'callback', "" ) or ""
+        if callback:
+            response		= callback + "( " + response + " )"
     elif accept == "text/html":
         # HTML5.  Yes, this minimal markup is cross-browser standards
         # compliant (including the unquoted attributes!)
@@ -724,6 +730,9 @@ def data_request( repository, project, path,
     response			= None
     if accept == "application/json":
         response		= json.dumps( stats, sort_keys=True, indent=4 )
+        callback		= queries and queries.get( 'callback', "" ) or ""
+        if callback:
+            response		= callback + "( " + response + " )"
 
     elif accept == "text/html":
         pass
