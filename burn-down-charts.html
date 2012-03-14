@@ -66,24 +66,26 @@
                 drawGraph(d)
             }
         })
+        // capitalizes to first letter in string
+        String.prototype.capitalize = function() {
+            return this.charAt(0).toUpperCase() + this.slice(1);
+        }
 
         function drawGraph(d) {
-            // json object structure:
+            //
+            //   json object structure:
             //   {
-            //     list:        Array,   # data array
-            //     project:     String,  # project name
-            //     style:       String,  # style is the type of graph
+            //       list:        Array,   # data array
+            //       project:     String,  # project name
+            //       style:       String,  # style is the type of graph
             //   }
             //
             var a                = d.list
             var data             = a
-            var allData = {
-                type: 'week',
-                title: 'Week',
-                list: [],
-                plot: []
-            }
-            var plot             = allData.plot
+            //
+            //   Temporarily renames variables to fit old code
+            //   -need to translate code to new names
+            //
             var q                = []
             for(var u=0;u<data.length;u++) {
                 var b            = data[u].estimated
@@ -98,13 +100,21 @@
                 }
             }
 
+            // Replace data with temporary q data
             var data             = q
             var total            = d3.sum(a, function (d) { return d.estimated['total#'] })
+
+            // Width and Height for the svg element
             var w                = 1170                //document.body.offsetWidth
             var h                = 400                 //document.body.offsetHeight
-            var margin           = 20
-            var left             = 40
-            var bottom           = 40
+
+            // Graph positioning variables
+            var margin           = 20 // right side offset
+            var left             = 40 // left side offset
+            var bottom           = 40 // bottom offset
+
+            // Graph width and height relative to the svg
+            // width and height and calculating offsets
             var gWidth           = w - left - margin
             var gHeight          = h - bottom - margin
 
@@ -112,23 +122,15 @@
             var xMin             = 0
             var xMax             = a.length
             // y domain
-            var yMin = d3.min(a, function (d) { return -( d.estimated['deltaTotal#'] ) })
-            var yMax = d3.max(a, function (d) { return d.estimated['todoTotal#'] + d.estimated['doneTotal#'] - d.estimated['addedTotal#'] })
-            if(yMin > -(yMax/8)) {
-                yMin = -(yMax/10)
-            }
-
-            /*
-            // x domain
-            var xMin             = 0
-            var xMax             = d3.max(data, function (d, i) { return i })
-            // y domain
-            var yMin = d3.min(data, function (d) { return -d.totalAdded })
-            var yMax = d3.max(data, function (d) { return d.remaining + d.completed })
-            if(yMin > -(yMax/8)) {
-                yMin = -(yMax/10)
-            }
-            */
+            var yMin = d3.min(a, function (d) {
+                return -( d.estimated['deltaTotal#'] )
+            })
+            var yMax = d3.max(a, function (d) {
+                var e            = d.estimated
+                return (e['todoTotal#'] + e['doneTotal#'] - e['addedTotal#'])
+            })
+            // if yMin is too small to create a rule then force a rule
+            var yMin             = yMin > -(yMax/8) ? -(yMax/10) : yMin
 
             var x = d3.scale.linear()
                 .domain([0, xMax])
@@ -136,17 +138,6 @@
             var y = d3.scale.linear()
                 .domain([yMin, yMax])
                 .range([0, h - bottom -margin])
-
-            var dx = 0,dy = 0;
-            for(var p=0;p<data.length;p++) {
-                if( dy > (gHeight - y(0)) ) {
-                    break
-                }
-                dy += Math.floor(Math.random()*35)
-                plot[plot.length] = {
-                    y: dy
-                }
-            }
 
             var svg = d3.select('.chart').append('svg')
                 .attr('width', w)
@@ -215,10 +206,6 @@
                 .attr('style', 'fill: #A00; fill-opacity: 0.5;')
                 .transition().delay(function (d, i) { return i*20 + (xMax*20) }).duration(500)
                 .attr('height', function (d) { return (y(d.totalAdded) - y(0)) })
-
-            String.prototype.capitalize = function() {
-                return this.charAt(0).toUpperCase() + this.slice(1);
-            }
 
             var yAxisX = function (d, i) {
                 return (barWidth/2) + barOffset - (avg*i)
