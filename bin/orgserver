@@ -17,15 +17,26 @@ RUN="${0##*/}-$( printf "%05d" $$ ):"
 DIR=${0%/*}
 ORG=${ORG_DIRECTORY:-~/org}
 PRO=${ORG_PROJECTS:-}
-RES=0
+RES=0 # restart any running server
+REF=0 # refresh git repos
 PID=${ORG}/orgserver.pid # +.##### contains PID of this orgserver's orgserver.py
 OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
 
 while (( $# > 0 )); do
     if [[ "$1" == "--restart" ]]; then
         RES=1
+    elif [[ "$1" == "--refresh" ]]; then
+        REF=1
+    elif [[ "$1" == "--org" ]]; then
+        shift
+        ORG=${1}
     elif [[ "$1" == "--help" ]]; then
-        echo "${RUN} --help --restart [project [...]]"
+        echo "${RUN} [--help] [--refresh] [--restart] [--org <dir>] [<project> ...]"
+        echo "    --help      This help"
+        echo "    --restart   Restart any running server"
+        echo "    --refresh   Refresh Git repositories"
+        echo "    --org <dir> org-mode data Git repository (default: ~/org)"
+        echo "    <project>   <project>.org files to parse (default: project.org)"
     else
         # All remaining options are projects
         PRO="${PRO}${PRO:+ }${1}"
@@ -43,17 +54,21 @@ cleanup () {
     rm -f $PID.$$
 }
 
-echo "${RUN} Refreshing $ORG..."
-( cd $ORG && git pull origin master )
+if (( REF )); then
+    echo "${RUN} Refreshing $ORG..."
+    ( cd $ORG && git pull origin master )
+fi
 
-echo "${RUN} Refreshing $DIR..."
 (
     cd $DIR
     master=$( git show --oneline )
-    git pull origin master
-    if [[ "$( git show --oneline )" != "$master" ]]; then
-        echo "Detected $DIR update"
-        RES=1
+    if (( REF )); then
+        echo "${RUN} Refreshing $DIR..."
+        git pull origin master
+        if [[ "$( git show --oneline )" != "$master" ]]; then
+            echo "Detected $DIR update"
+            RES=1
+        fi
     fi
     if (( RES )); then
         echo "${RUN} Restarting orgserver.py"

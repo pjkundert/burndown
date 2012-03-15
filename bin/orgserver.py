@@ -216,7 +216,6 @@ class task( object ):
         # clocksum.  Add that, too.
         sub			= timedict(int)
         for state, times in res.items():
-            print "totals: summing %r" % times
             sub                += times
 
         our			= self.data - sub
@@ -426,7 +425,7 @@ def project_data_parse( data, project, style ):
             "todo", "todoTotal",
             "done", "doneTotal",		# Done since last, and sum total
             "removed", "removedTotal",		# Existing tasks cancelled
-            "added", "addedTotal",		# New tasks added, and sum total
+            "added", "addedTotal",		# New tasks added/uncancelled, and sum total
             "delta", "deltaTotal",		# net change and total change
         ]
         if dicts[0] not in stats:
@@ -463,9 +462,19 @@ def project_data_parse( data, project, style ):
             if prior:
                 stats["todo"]		= stats["todoTotal"]    - prior["todoTotal"]
                 stats["done"]		= stats["doneTotal"]    - prior["doneTotal"]
+                # Added is the sum of: a) the the absolute increase in
+                # the total project size (including all tasks, even
+                # cancelled),
                 stats["added"]		= stats["total"]        - prior["total"]
-                stats["addedTotal"]     = stats["added"]	+ prior["addedTotal"]
+                # PLUS b) any existing tasks changed from cancelled to
+                # something else; if "removed" goes -'ve, this really
+                # means "added"; never let "removed" go -'ve.
                 stats["removed"]	= stats["removedTotal"] - prior["removedTotal"]
+                for k, v in list( stats["removed"].iteritems() ):
+                    if v < 0:
+                        stats["added"]         += (k, -v)
+                        stats["removed"]       += (k, -v)
+                stats["addedTotal"]     = stats["added"]	+ prior["addedTotal"]
                 stats["delta"]          = stats["added"]        - stats["removed"]
                 stats["deltaTotal"]     = stats["delta"]	+ prior["deltaTotal"]
 
@@ -479,6 +488,12 @@ def project_data_parse( data, project, style ):
                         stats[d]  = timedict(int)
                     if k not in stats[d]:
                         stats[d] += (k, 0)
+
+            for d in dicts:
+                print task( state="",
+                            description=d,
+                            times=stats[d].items() ).format( level=0 )
+
 
         # Turn all the stats <timedict> back into textual time specs,
         # using their custom __reversed__ method.

@@ -3,15 +3,25 @@
 
 ** bin/orgserver -- web.py based API server
    Serves org-mode data from the specified org directory, for the
-   specified projects.  Attempts to update from git, and kills any
-   running servers if changes to the burndown implementation are
+   specified projects.  May be configured to update from git, and kill
+   a running servers if changes to the burndown implementation are
    detected.
 
    The running orgserver puts its python orgserver.py's PID in the org
    directory, in an orgserver.pid.##### file ending with the
    orgserver's own PID.  This is used by subsequent orgservers, to
    locate and terminate the running orgserver.py instances.
-   
-   Output of orgserver is appended to the org directory's
-   orgserver.log file.
 
+   The following environment variables may be set:
+
+       ORG_PROJECTS	-- The list of project names
+       ORG_DIRECTORY	-- The org directory
+
+   The options are:
+
+       orgserver [--help] [--refresh] [--restart] [--org <dir>] [<project> ...]
+           --help      This help
+           --refresh   Refresh Git repositories
+           --restart   Restart any running server
+           --org <dir> org-mode data Git repository (default: ~/org)
+           <project>   <project>.org files to parse (default: project.org)
