@@ -26,14 +26,16 @@ cleanup () {
     rm -f $PID.$$
 }
 
+echo "Refreshing $ORG..."
 ( cd $ORG && git pull origin master )
 
+echo "Refreshing $DIR..."
 (
     cd $DIR
     master=$( git show --oneline )
     git pull origin master
     if [[ "$( git show --oneline )" != "$master" ]]; then
-        echo "Project updated; restarting orgserver"
+        echo "Detected $DIR update; restarting orgserver"
         for pid in $PID.*; do
             if [ -f $pid ]; then
                 kill $( cat $pid )
