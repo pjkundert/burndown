@@ -4,23 +4,55 @@
 #
 #     Start the org-mode data server, on the specified org data Git
 # repository $ORG, with the specified projects $PRO.  Attempts to
-# refresh the org data with "git pull" .
+# refresh the org data and project with "git pull origin master".  If
+# changes are detected in the source, attempts to restart the server.
 #
 #     Can be run with a cron job to regularly refresh the org data,
 # and attempt to restart the server.
 #
 
-
 export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 
+
 DIR=${0%/*}
-OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
 ORG=~/org
 PRO="burndown port"
+OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
+PID=${ORG}/orgserver.pid # +.##### contains PID of this orgserver's orgserver.py
+
+# Clean up our PID file on exit
+trap cleanup EXIT
+cleanup () {
+    rm -f $PID.$$
+}
 
 ( cd $ORG && git pull origin master )
 
-CMD="$DIR/orgserver.py $OPT $ORG $PRO"
+(
+    cd $DIR
+    master=$( git show --oneline )
+    git pull origin master
+    if [[ "$( git show --oneline )" != "$master" ]]; then
+        echo "Project updated; restarting orgserver"
+        for pid in $PID.*; do
+            if [ -f $pid ]; then
+                kill $( cat $pid )
+                rm $pid
+            fi
+            sleep 1
+        done
+    fi
+)
 
-echo $CMD
-$CMD
+# Run the python orgserver.py, savings its PID, and waiting 'til it
+# exits
+CMD="$DIR/orgserver.py $OPT $ORG $PRO"
+echo "orgserver starting: $CMD"
+$CMD &
+echo $! >> $PID.$$
+wait $!
+if (( $? )); then
+    echo "orgserver failed: $?"
+else
+    echo "orgserver exiting."
+fi
