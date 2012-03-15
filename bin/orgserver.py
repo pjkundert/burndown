@@ -892,11 +892,16 @@ if __name__ == "__main__":
 
         import web
         urls			= (
+            "/(.*)/",				"trailing_slash",
             "/",				"home",
-            "/api/projects.json/?",		"projects",
-            "/api/projects/?",			"projects",
+            "/api/projects.json",		"projects",
+            "/api/projects",			"projects",
             "/api/data/(.*)",			"data",		# Passes remainder as argument
         )
+
+        class trailing_slash:
+            def GET( self, path ):
+                web.seeother( '/' + path )
 
         class home:
             def GET( self ):
@@ -940,8 +945,6 @@ if __name__ == "__main__":
                 environ		= web.ctx.environ
                 queries		= web.input()
                 accept		= None
-                if path.endswith( "/" ):
-                    path	= path[:-1]
                 if path.endswith( ".json" ):
                     accept	= "application/json"
                     path	= path[:-5] # Clip off .json

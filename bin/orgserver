@@ -13,29 +13,50 @@
 
 export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 
-
+RUN="${0##*/}-$( printf "%05d" $$ ):"
 DIR=${0%/*}
-ORG=~/org
-PRO="burndown port"
-OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
+ORG=${ORG_DIRECTORY:-~/org}
+PRO=${ORG_PROJECTS:-}
+RES=0
 PID=${ORG}/orgserver.pid # +.##### contains PID of this orgserver's orgserver.py
+OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
 
-# Clean up our PID file on exit
+while (( $# > 0 )); do
+    if [[ "$1" == "--restart" ]]; then
+        RES=1
+    elif [[ "$1" == "--help" ]]; then
+        echo "${RUN} --help --restart [project [...]]"
+    else
+        # All remaining options are projects
+        PRO="${PRO}${PRO:+ }${1}"
+    fi
+    shift
+done
+
+echo "${RUN} Directory: ${ORG}"
+echo "${RUN} Projects:  ${PRO}"
+
+# Kill our orgserver.py and clean up our PID file on exit
 trap cleanup EXIT
 cleanup () {
+    kill $( cat $PID.$$ )
     rm -f $PID.$$
 }
 
-echo "Refreshing $ORG..."
+echo "${RUN} Refreshing $ORG..."
 ( cd $ORG && git pull origin master )
 
-echo "Refreshing $DIR..."
+echo "${RUN} Refreshing $DIR..."
 (
     cd $DIR
     master=$( git show --oneline )
     git pull origin master
     if [[ "$( git show --oneline )" != "$master" ]]; then
-        echo "Detected $DIR update; restarting orgserver"
+        echo "Detected $DIR update"
+        RES=1
+    fi
+    if (( RES )); then
+        echo "${RUN} Restarting orgserver.py"
         for pid in $PID.*; do
             if [ -f $pid ]; then
                 kill $( cat $pid )
@@ -48,13 +69,13 @@ echo "Refreshing $DIR..."
 
 # Run the python orgserver.py, savings its PID, and waiting 'til it
 # exits
-CMD="$DIR/orgserver.py $OPT $ORG $PRO"
-echo "orgserver starting: $CMD"
+CMD="${DIR}/orgserver.py ${OPT} ${ORG} ${PRO}"
+echo "${RUN} Starting: $CMD"
 $CMD &
 echo $! >> $PID.$$
 wait $!
 if (( $? )); then
-    echo "orgserver failed: $?"
+    echo "${RUN} Failed: $?"
 else
-    echo "orgserver exiting."
+    echo "${RUN} Exiting."
 fi
