@@ -96,8 +96,7 @@ def project_data( repository, projects ):
                 b		= commit.tree/(p + ".org")
             except Exception, e:
                 print "No %s.org found in commit %8.8s" %( p, commit.hexsha )
-                project_data.hexsha = None	# Invalidate partial result data!
-                raise
+                continue
             bl                  = project_data.result.setdefault( p, [] )
             if not bl or bl[-1].hexsha != b.hexsha:
                 bl.insert( 0, b )
