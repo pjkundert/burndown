@@ -12,3 +12,6 @@
    orgserver's own PID.  This is used by subsequent orgservers, to
    locate and terminate the running orgserver.py instances.
    
+   Output of orgserver is appended to the org directory's
+   orgserver.log file.
+
