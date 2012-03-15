@@ -9,4 +9,6 @@
 
    The running orgserver puts its python orgserver.py's PID in the org
    directory, in an orgserver.pid.##### file ending with the
-   orgserver's own PID. 
+   orgserver's own PID.  This is used by subsequent orgservers, to
+   locate and terminate the running orgserver.py instances.
+   
