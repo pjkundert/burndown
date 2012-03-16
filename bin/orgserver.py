@@ -580,6 +580,32 @@ def project_stats_transform( results, style ):
 
     results["list"]		= filled
 
+    # Compute the burndown lines for each record.  The first record doesn't have
+    # one (as there is no slope), nor does any empty record (one with no "list"
+    # entry).
+    rec				= None, None
+    for x in xrange( len( results["list"] )):
+        rec			= results["list"][x]
+        if x == 0:
+            continue
+        print "Computing lines for %s" % ( json.dumps( rec, indent=4 ))
+        lines = rec["lines"]	= {}
+        prgs = lines["progress"]= []
+        x                       = 0
+        y                       = rec["estimated"]["todoTotal#"]
+        prgs.append((x, y))
+        x                       = len( results )
+        y			= 0
+        prgs.append((x, y))
+
+        efrt = lines["effort"]	= []
+        x			= 0
+        y			= 0
+        efrt.append((x, y))
+        x			= len( results )
+        y			= 0
+        efrt.append((x, y))
+
 
 def deduce_encoding( available, environ, accept=None ):
     """Deduce acceptable encoding from HTTP Accept: header:
