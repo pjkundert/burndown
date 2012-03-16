@@ -69,7 +69,7 @@
         var fn;
         // Get project json object from api and send it to drawGraph
         $.ajax({
-            url: 'http://localhost:8080/api/data/test/elapsed.json',
+            url: '/api/data/test/elapsed.json',
             dataType: 'jsonp',
             success: function(d) {
                 data             = d
