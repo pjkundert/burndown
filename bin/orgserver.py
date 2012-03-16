@@ -679,10 +679,9 @@ def project_stats_transform( results, style ):
         rec["label"]		= "Day %d" % ( len( results["list"] ) + 1 )
         rec["blob"]		= None
         rec["lines"]            = None
-        for d in "estimated", "work":
-            for k, v in list( rec[d].items() ):
-                rec[d][k]	= "0:00"
-                rec[d][k+"#"]	= 0
+        rec["estimated"]        = None
+        rec["work"]             = None
+
         print "Extend  %s" % ( rec["date"] )
         results["list"].append( rec )
 
