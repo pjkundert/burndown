@@ -6,7 +6,7 @@
 
     <title>Burn Down Charts</title>
 
-    <link href="http://google-code-prettify.googlecode.com/svn/trunk/src/prettify.css"
+    <link href="bootstrap/prettify/prettify.css"
           type="text/css" rel="stylesheet" />
     <link href="bootstrap/css/bootstrap.min.css"
           type="text/css" rel="stylesheet" />
@@ -34,7 +34,7 @@
     }
     </style>
 </head>
-<body style="background-color: #EEE;" onload="prettyPrint()">
+<body style="background-color: #EEE;">
     <div class="navbar navbar-fixed-top">
         <div class="navbar-inner">
             <div class="container">
@@ -56,7 +56,7 @@
         <div class="chart">
         </div>
     </div>
-    <script src="http://google-code-prettify.googlecode.com/svn/trunk/src/prettify.js"
+    <script src="bootstrap/prettify//prettify.js"
             type="text/javascript" rel="javascript"></script>
     <script src="bootstrap/js/jquery-1.7.1.min.js"
             type="text/javascript" rel="javascript"></script>
@@ -65,12 +65,15 @@
     <script src="resources/d3.v2.js?2.8.0"
             type="text/javascript" rel="javascript"></script>
     <script type="text/javascript">
+        var data;
+        var fn;
         // Get project json object from api and send it to drawGraph
         $.ajax({
-            url: 'http://org.hardconsulting.com/api/data/burndown/effort.json',
+            url: 'http://localhost:8080/api/data/test/elapsed.json',
             dataType: 'jsonp',
             success: function(d) {
-                drawGraph(d)
+                data             = d
+                new drawGraph(d)
             }
         })
         // capitalizes to first letter in string
@@ -78,78 +81,61 @@
             return this.charAt(0).toUpperCase() + this.slice(1);
         }
 
-        function drawGraph(d) {
-            //
+        function drawGraph(data) {
+            fn = this
             //   json object structure:
             //   {
             //       list:        Array,   # data array
             //       project:     String,  # project name
             //       style:       String,  # style is the type of graph
             //   }
-            //
-            var a                = d.list
-            var data             = a
-            //
-            //   Temporarily renames variables to fit old code
-            //   -need to translate code to new names
-            //
-            var q                = []
-            for(var u=0;u<data.length;u++) {
-                var b            = data[u].estimated
-                q[u] = {}
-                for(i in b) {
-                    q[u][i]      = b[i]
-                }
-                q[u]['segment']      = u+1,
-                q[u]['remaining']    = (b['todoTotal#'] - b['added#'])
-                q[u]['completed']    = b['done#']
-                q[u]['removed']      = b['removed#']
-                q[u]['totalRemoved'] = b['removedTotal#']
-                q[u]['added']        = b['added#']
-                q[u]['totalAdded']   = b['addedTotal#']
-            }
-
-            // Replace data with temporary q data
-            var data             = q
-            var total            = d3.sum(a, function (d) { return d.estimated['total#'] })
+            var allData          = data
+            var data             = data.list
 
             // Width and Height for the svg element
             var w                = 1170                //document.body.offsetWidth
             var h                = 400                 //document.body.offsetHeight
 
             // Graph positioning variables
-            var margin           = 20 // right side offset
+            var top              = 20 // top side offset
+            var right            = 20 // right side offset
             var left             = 40 // left side offset
             var bottom           = 40 // bottom offset
 
             // Graph width and height relative to the svg
             // width and height and calculating offsets
-            var gWidth           = w - left - margin
-            var gHeight          = h - bottom - margin
+            var gWidth           = w - left - right
+            var gHeight          = h - bottom - top
 
-            // x domain
+            // x domain min and max
             var xMin             = 0
             var xMax             = []
-            for(i in a) {
-                xMax.push(d.style.capitalize()+' '+i)
+            // Create list for x axis rules and range
+            for(i in data) {
+                xMax.push(data[i].label)
             }
-            // y domain
-            var yMin = d3.min(a, function (d) {
+
+            // y domain min and max
+            var yMin = d3.min(data, function (d) {
                 return -( d.estimated['deltaTotal#'] )
             })
-            var yMax = d3.max(a, function (d) {
+            var yMax = d3.max(data, function (d) {
                 var e            = d.estimated
-                return (e['todoTotal#'] + e['doneTotal#'] - e['addedTotal#'])
+                return (e['todoTotal#'] + e['doneTotal#'])
             })
-            // if yMin is too small to create a rule then force a rule
-            var yMin             = yMin > -(yMax/8) ? -(yMax/10) : yMin
 
+            // if yMin is too small to create a negative rule line
+            // then force a rule
+            var yMin             = yMin > -(yMax/8) ? -(yMax/6) : yMin
+
+            // define x and y scales
             var x = d3.scale.ordinal()
                 .domain(xMax)
-                .rangeBands([left, gWidth], 0.65)
+                // space between bars will be 65% of bar width
+                .rangeBands([0, gWidth], 0.65)
             var y = d3.scale.linear()
                 .domain([yMin, yMax])
-                .range([0, h - bottom -margin])
+                .range([gHeight, 0])
 
             // Create SVG element
             var svg = d3.select('.chart').append('svg')
@@ -159,7 +145,7 @@
             // Create x Axis rules
             var xAxis = svg.append('g')
                 .attr('class', 'xAxis')
-                .attr('transform', 'translate(' + left + ', ' + margin + ')')
+                .attr('transform', 'translate(' + left + ', ' + top + ')')
 
             // Assign data using y axis ticks function to .rule elements
             var xRule = xAxis.selectAll('.rule')
@@ -167,12 +153,20 @@
             // Position container for rules
             .enter().append('g')
                 .attr("transform", function(d) {
-                    return 'translate(0,' + (gHeight - y(d)) + ')';
+                    return 'translate(0,' + y(d) + ')';
                 })
             // Draw line for rules
             xRule.append('line')
                 .attr('x2', gWidth)
                 .attr('style', 'stroke: #EEE; stroke-width: 1; stroke-opacity: 1;')
+            function roundNumber(num, dec) {
+                var result = Math.round(num*Math.pow(10,dec))/Math.pow(10,dec);
+                if(result===0) {
+                    result                = '0.0'
+                }
+                return result;
+            }
+
             // Draw text for rules
             xRule.append("text")
                 .attr("x", 6)
@@ -181,139 +175,328 @@
                 .attr('text-anchor', 'end')
                 .attr('style', 'font-size: 10pt; fill: #BBB;')
             // Convert from seconds to hours
-                .text(function(d) { return (Math.round(d/3600)+':00') });
-
-            // Bar configuration
-            var barWidth = 20
-            var barOffset = 40
-
-            // Calculate average distance between bars
-            //  - this is fixed with .rangeBands() for the x axis
-            //  domain and range. Needs to be fixed.
-            var avg = (barWidth + (barOffset * 2)) / (a.length - 1)
+                .text(function(d) {
+                    return ((roundNumber(d/3600,1)+'0').replace(/\./,':'))
+                });
 
             // Create container for Graph
             var graph = svg.append('g')
                 .attr('width', gWidth)
                 .attr('height', gHeight)
-                .attr('transform', 'translate(' + (left - barWidth) + ',0)')
+                .attr('transform', 'translate(' + left + ','+top+')')
 
-            // Assign data to the .bars element then create and
-            // position container for bars
+            // Assign data to the .bars element then create
             var bars = graph.selectAll('.bars')
-                .data(data, function (d) { return d['todo#'] })
+                .data(data, function (d) { return d.estimated['todo#'] })
             .enter().append('g')
-                .attr('transform', 'translate(0, ' + (gHeight + margin) + ')')
             // Creating rectangles
             // - Green rect is estimations done
-            // - Gray rect is estimations todo
+            // - Grey rect is estimations todo
             // - Red is estimations added
             // - Offset is Estimations removed
-            //
-            // Create Gray rect
+
+            // Create Grey rect
+            var greyDelay                 = 20
+            var greyDuration              = 300
+            var greyY                     = []
+            var greyH                     = []
+
+            // Create Green rect
+            var greenDelay                = 20
+            var greenDuration             = 300
+            var greenY                    = []
+            var greenH                    = []
+
+            // Create Red rect
+            var redDelay                  = 20
+            var redDuration               = 300
+            var redY                      = []
+            var redH                      = []
+
             bars.append('rect')
+                .attr('class', 'bar')
+                .attr('index', function (d, i) {
+                    return i
+                })
                 .attr('width', x.rangeBand())
-                .attr('height', 0)
+                .attr('height', function(d, i) {
+                    var d                 = d.estimated
+                    // Calculate Height:
+                    // todoTotal - added and multiply by single range
+                    // interval
+                    var a                 = d['todoTotal#']
+                    var b                 = d['added#']
+                    var c                 = (a - b)
+                    var r                 = y(0) - y(1)
+                    greyH[i]              = (r*c)
+
+                    // return 0 for transition start
+                    return 0
+                })
                 .attr('x', function(d, i) {
                     return x(i)
                 })
-                .attr('y', function (d) {
-                    // Calculate 0 line y(range) then account for
-                    // removedTotal and position top for animation
-                    // from top to bottom
-                    console.log(d)
-                    return -(y(d.remaining) + y(d.totalRemoved) - y(0))
+                .attr('y', function (d, i) {
+                    var d                 = d.estimated
+                    // Calculate range interval and multiply
+                    // deltaTotal by it to get offset and then add to
+                    // todoTotal
+                    var a                 = d['deltaTotal#']
+                    var b                 = d['todoTotal#']
+                    var r                 = y(0) - y(1)
+                    var t                 = (y(b) + (a*r))
+                    greyY[i]              = t
+
+                    // return greyY
+                    return greyY[i]
                 })
                 .attr('style', 'fill: #DDD; fill-opacity: 0.8;')
                 .transition().delay(function (d, i) {
-                    // Animate in sequence left to right every 20ms
-                    return i*20
-                }).duration(500)
-                .attr('height', function (d) {
-                    // Calculate todo y(range) subtract 0 line y(range)
-                    return (y(d.remaining) - y(0))
+                    // Animate in sequence left to right
+                    return (i*greyDelay)
+                }).duration(greyDuration)
+                .attr('height', function (d,i) {
+                    return greyH[i]
                 })
-            // Create Green rect
+
             bars.append('rect')
                 .attr('width', x.rangeBand())
                 .attr('height', 0)
                 .attr('x', function(d, i) {
                     return x(i)
                 })
-                .attr('y', function (d) {
-                    // Calculate 0 line y(range) then account for
-                    // removedTotal and subtract 0 line from that
-                    // then position above Gray bar at the top for
-                    // animation from top to bottom
-                    return -(y(d.completed) + y(d.remaining) - y(0) + y(d.totalRemoved) - y(0))
+                .attr('y', function (d, i) {
+                    var d                 = d.estimated
+                    // Calculate range interval and multiply done by
+                    // it to get offset and then subtract from greyY
+                    var a                 = d['done#']
+                    var r                 = y(0) - y(1)
+                    var t                 = (a*r)
+                    greenH[i]             = t
+                    greenY[i]             = greyY[i] - t
+                    return greyY[i]
                 })
                 .attr('style', 'fill: #060; fill-opacity: 0.4;')
                 .transition().delay(function (d, i) {
-                    // Start animation after Gray bar animation in
+                    // Start animation after Grey bar animation in
                     // sequence left to right every 20ms
-                    return i*20 + (xMax*20)
-                }).duration(500)
-                .attr('height', function (d) {
-                    // Calculate done y(range) subtract 0 line y(range)
-                    return (y(d.completed) - y(0))
+                    return ((i*greenDelay) + (xMax.length*greyDelay + greyDuration))
+                }).duration(greenDuration)
+                .attr('height', function (d, i) {
+                    return greenH[i]
                 })
-            // Create Red rect
+                .attr('y', function (d, i) {
+                    return greenY[i]
+                })
+
+
             bars.append('rect')
                 .attr('width', x.rangeBand())
-                .attr('height', 0)
+                .attr('height', function (d, i) {
+                    var d                 = d.estimated
+                    var a                 = d['added#']
+                    var r                 = y(0) - y(1)
+                    var t                 = (a*r)
+                    redH[i]               = t
+
+                    // return 0 for transition start
+                    return 0
+                })
                 .attr('x', function(d, i) {
                     return x(i)
                 })
-                .attr('y', function (d) {
-                    // Offset for removedTotal
-                    return -y(d.totalRemoved)
+                .attr('y', function (d, i) {
+                    var d                 = d.estimated
+                    // red y is grey's height + offset from top
+                    var a                 = greyH[i] + greyY[i]
+                    redY[i]               = a
+
+                    // return redY
+                    return redY[i]
                 })
                 .attr('style', 'fill: #A00; fill-opacity: 0.5;')
                 .transition().delay(function (d, i) {
-                    // Start animation after Gray bar animation in
+                    // Start animation after Grey bar animation in
                     // sequence left to right every 20ms
-                    return i*20 + (xMax*20)
-                }).duration(500)
-                .attr('height', function (d) {
-                    return (y(d.totalAdded) - y(0))
+                    return i*redDelay + (xMax.length*greyDelay + greyDuration)
+                }).duration(redDuration)
+                .attr('height', function (d, i) {
+                    return redH[i]
                 })
+
 
             // Create container for x axis rules
             var yAxis = svg.append('g')
                 .attr('class', 'xAxis')
-                .attr('transform', 'translate(0, ' + margin + ')')
+                .attr('transform', 'translate('+left+', '+top+')')
             // Create and position container for rule
             var yRule = yAxis.selectAll('.rule')
                 .data(data)
             .enter().append('g')
                 .attr("transform", function(d, i) {
-                    // positioning along x axis and the bottom of the graph
-                    // - need to use x.rangeBands() for this as well
-                    return 'translate(0, ' + (gHeight) + ')';
+                    // position at bottom of graph
+                    return 'translate(0, ' + gHeight + ')';
                 })
             // Create text elements
             yRule.append("text")
-                .data(data, function (d) { return d.segment })
                 .attr("x", function (d, i) {
                     return x(i)
                 })
+                .attr('y', 10)
                 .attr("dy", ".0em")
-                .attr("transform", function (d, i) {
-                    // if the x rule text is overlapping then offset
-                    // odd and even text on the y axis
-                    if(i%2==0) {
-                        var t = 'translate('+(x.rangeBand()/2)+', 18)'
-                    } else {
-                        var t = 'translate('+(x.rangeBand()/2)+', 18)'
-                    }
-                    return t
-                })
-                .attr('text-anchor', 'left')
+                .attr('dx', (x.rangeBand()/2))
+                .attr('text-anchor', 'middle')
                 .attr('style', 'font-size: 10pt; fill: #BBB;')
-                .text(function (p) {
+                .text(function (d, i) {
                     // json api will return title for rules
-                    return d.style.capitalize() + ' ' + p.segment
+                    return xMax[i]
                 })
+
+            // create and assign data to plot lines
+            var plotLines = svg.append('g')
+                .attr('class','plotLines')
+                .attr('transform', 'translate('+left+', '+top+')')
+            var plot = plotLines.selectAll('.plot')
+                .data(data)
+            // Draw line for plot
+            .enter().append('line')
+                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
+                .attr('y1', greyY[0])
+                .attr('x2', function (d, i) {
+                    if(d.lines) {
+                        var d                = d.estimated
+                        var a                = xMax.length-1
+                        return x(a) + (x.rangeBand()/2)
+                    }
+                    return x(0) + (x.rangeBand()/2)
+                })
+                .attr('y2', function (d, i) {
+                    if(d.lines) {
+                        var d                = d.estimated
+                        var a                = greyY[i]
+                        var b                = greyY[0]
+                        var c                = a - b
+                        var e                = c/i
+                        var f                = xMax.length-1
+                        var g                = e*f
+                        return g
+                    }
+                    return greyY[0]
+                })
+                .attr('style', function (d, i) {
+                    return 'stroke: #C00; stroke-width: 2; stroke-opacity: 0.6;'
+                })
+                .attr('class', function (d, i) {
+                    if((xMax.length-1) == i) {
+                        return 'show'
+                    } else {
+                        return 'hide'
+                    }
+                })
+                .attr('index', function (d, i) {
+                    return i
+                })
+
+            // create and assign data to plot lines
+            var deltaLines = svg.append('g')
+                .attr('class','plotLines')
+                .attr('transform', 'translate('+left+', '+top+')')
+            var delta = plotLines.selectAll('.delta')
+                .data(data)
+            // Draw line for plot
+            .enter().append('line')
+                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
+                .attr('y1', greyY[0]+greyH[0])
+                .attr('x2', function (d, i) {
+                    if(d.lines) {
+                        var d                = d.estimated
+                        var a                = xMax.length-1
+                        return x(a) + (x.rangeBand()/2)
+                    }
+                    return x(0) + (x.rangeBand()/2)
+                })
+                .attr('y2', function (d, i) {
+                    if(d.lines) {
+                        var d                = d.estimated
+                        var a                = -d['deltaTotal#']
+                        var b                = y(0) - y(1)
+                        var c                = null
+                        var e                = a/i
+                        var f                = xMax.length-1
+                        var g                = e*f
+                        return y(g)
+                    }
+                    return greyY[0]+greyH[0]
+                })
+                .attr('style', function (d, i) {
+                    return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.6;'
+                })
+                .attr('class', function (d, i) {
+                    if((xMax.length-1) == i) {
+                        return 'show'
+                    } else {
+                        return 'hide'
+                    }
+                })
+                .attr('index', function (d, i) {
+                    return i
+                })
+
+            $('.hide').hide()
+            $('.bar').mouseover(function() {
+                var a                = $(this).attr('index')
+                var b                = $('line[index="'+a+'"]')
+                b.show()
+                $('.show').hide()
+            })
+            $('.bar').mouseout(function() {
+                var a                = $(this).attr('index')
+                var b                = $('line[index="'+a+'"]')
+                b.hide()
+                $('.show').show()
+            })
+
+/*            plotLines.append('line')
+                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
+                .attr('y1', greyY[0])
+                .attr('x2', ( x(xMax.length-1) + (x.rangeBand()/2) ))
+                .attr('y2', (greenH[xMax.length-1] + greenY[xMax.length-1] ))
+                .attr('style', 'stroke: #C00; stroke-width: 1; stroke-opacity: 1;')
+
+
+            // create and assign data to plot lines
+            var plotLines = svg.append('g')
+                .attr('class','plotLines')
+                .attr('transform', 'translate('+left+', '+top+')')
+            var linesData                    = []
+            for(i in data) {
+                if(data[i].lines) {
+                    linesData[i]             = data[i].lines.progress
+                }
+            }
+
+            var plot = plotLines.selectAll('.plot')
+                .data(linesData)
+            // Draw line for plot
+            .enter().append('line')
+                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
+                .attr('y1', greyY[0])
+                .attr('x2', function (d, i) {
+                    console.log(d)
+                    return x(d[1][0]) + (x.rangeBand()/2)
+                })
+                .attr('y2', function (d, i) {
+                    return y(d[1][1])
+                })
+                .attr('style', function (d, i) {
+                    console.log(i)
+                    if((xMax.length-1) == i) {
+                        return 'stroke: #0C0; stroke-width: 2; stroke-opacity: 0.4;'
+                    } else {
+                        return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.1;'
+                    }
+                })
+*/
         }
 
     </script>
