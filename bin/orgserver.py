@@ -594,11 +594,10 @@ def project_stats_transform( results, style ):
         print "Computing lines for %s" % ( json.dumps( rec, indent=4 ))
         lines = rec["lines"]	= {}
         px0                     = 0
-        py0                     =      one["estimated"]["todoTotal#"] - one["estimated"]["deltaTotal#"]
+        py0                     = one["estimated"]["todoTotal#"] - one["estimated"]["deltaTotal#"]
 
         px1                     = i
-        py1			= (  ( one["estimated"]["todoTotal#"] - one["estimated"]["deltaTotal#"] )
-                                   - ( rec["estimated"]["todoTotal#"] - rec["estimated"]["deltaTotal#"] ))
+        py1			= rec["estimated"]["todoTotal#"] - rec["estimated"]["deltaTotal#"]
         pslope			= float(py0 - py1) / float(px0 - px1)
 
         cx0			= 0
@@ -610,8 +609,10 @@ def project_stats_transform( results, style ):
         lines["progress"]	= [(px0, py0), (px1, py1)]
         lines["change"]		= [(cx0, cy0), (cx1, cy1)]
 
-        print "Record %d: progress: %-32s, %f slope" % ( i, repr( lines["progress"] ), pslope )
-        print "Record %d: change:   %-32s, %f slope" % ( i, repr( lines["change"] ),   cslope )
+        print "Record %d: progress: %-32s, %f slope" % (
+            i, repr( lines["progress"] ), pslope )
+        print "Record %d: change:   %-32s, %f slope" % (
+            i, repr( lines["change"] ),   cslope )
 
 
 
