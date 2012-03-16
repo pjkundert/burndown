@@ -82,7 +82,6 @@
         }
 
         function drawGraph(data) {
-            fn = this
             //   json object structure:
             //   {
             //       list:        Array,   # data array
@@ -110,18 +109,29 @@
             // x domain min and max
             var xMin             = 0
             var xMax             = []
+            var lastLine         = 0
             // Create list for x axis rules and range
             for(i in data) {
+                if(data[i].lines) {
+                    lastLine     = i
+                }
                 xMax.push(data[i].label)
             }
-
             // y domain min and max
             var yMin = d3.min(data, function (d) {
-                return -( d.estimated['deltaTotal#'] )
+                if(d.estimated) {
+                    return -( d.estimated['deltaTotal#'] )
+                } else {
+                    return 0
+                }
             })
             var yMax = d3.max(data, function (d) {
                 var e            = d.estimated
-                return (e['todoTotal#'] + e['doneTotal#'])
+                if(e) {
+                    return (e['todoTotal#'] + e['doneTotal#'])
+                } else {
+                    return 0
+                }
             })
 
             // if yMin is too small to create a negative rule line
@@ -185,9 +195,18 @@
                 .attr('height', gHeight)
                 .attr('transform', 'translate(' + left + ','+top+')')
 
+            var barData                   = []
+            for(i in data) {
+                if(data[i].estimated) {
+                    barData[i]            = data[i]
+                } else {
+                    break
+                }
+            }
+
             // Assign data to the .bars element then create
             var bars = graph.selectAll('.bars')
-                .data(data, function (d) { return d.estimated['todo#'] })
+                .data(barData, function (d) { return d.estimated['todo#'] })
             .enter().append('g')
             // Creating rectangles
             // - Green rect is estimations done
@@ -363,31 +382,16 @@
                 .attr('x1', ( x(0) + (x.rangeBand()/2) ))
                 .attr('y1', greyY[0])
                 .attr('x2', function (d, i) {
-                    if(d.lines) {
-                        var d                = d.estimated
-                        var a                = xMax.length-1
-                        return x(a) + (x.rangeBand()/2)
-                    }
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
-                    if(d.lines) {
-                        var d                = d.estimated
-                        var a                = greyY[i]
-                        var b                = greyY[0]
-                        var c                = a - b
-                        var e                = c/i
-                        var f                = xMax.length-1
-                        var g                = e*f
-                        return g
-                    }
                     return greyY[0]
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #C00; stroke-width: 2; stroke-opacity: 0.6;'
                 })
                 .attr('class', function (d, i) {
-                    if((xMax.length-1) == i) {
+                    if(lastLine == i) {
                         return 'show'
                     } else {
                         return 'hide'
@@ -395,6 +399,23 @@
                 })
                 .attr('index', function (d, i) {
                     return i
+                })
+            .transition()
+            .delay(500)
+            .duration(500)
+                .attr('x2', function (d, i) {
+                    if(lastLine == i) {
+                        var a                = d.lines.progress[1][0]
+                        return x(a) + (x.rangeBand()/2)
+                    }
+                    return x(0) + (x.rangeBand()/2)
+                })
+                .attr('y2', function (d, i) {
+                    if(lastLine == i) {
+                        var a                = d.lines.progress[1][1]
+                        return y(a)
+                    }
+                    return greyY[0]
                 })
 
             // create and assign data to plot lines
@@ -408,31 +429,16 @@
                 .attr('x1', ( x(0) + (x.rangeBand()/2) ))
                 .attr('y1', greyY[0]+greyH[0])
                 .attr('x2', function (d, i) {
-                    if(d.lines) {
-                        var d                = d.estimated
-                        var a                = xMax.length-1
-                        return x(a) + (x.rangeBand()/2)
-                    }
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
-                    if(d.lines) {
-                        var d                = d.estimated
-                        var a                = -d['deltaTotal#']
-                        var b                = y(0) - y(1)
-                        var c                = null
-                        var e                = a/i
-                        var f                = xMax.length-1
-                        var g                = e*f
-                        return y(g)
-                    }
                     return greyY[0]+greyH[0]
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.6;'
                 })
                 .attr('class', function (d, i) {
-                    if((xMax.length-1) == i) {
+                    if(lastLine == i) {
                         return 'show'
                     } else {
                         return 'hide'
@@ -441,62 +447,80 @@
                 .attr('index', function (d, i) {
                     return i
                 })
+            .transition()
+            .delay(500)
+            .duration(500)
+                .attr('x2', function (d, i) {
+                    if(lastLine == i) {
+                        var a                = d.lines.change[1][0]
+                        return x(a) + (x.rangeBand()/2)
+                    }
+                    return x(0) + (x.rangeBand()/2)
+                })
+                .attr('y2', function (d, i) {
+                    if(lastLine == i) {
+                        var a                = d.lines.change[1][1]
+                        return y(a)
+                    }
+                    return greyY[0]+greyH[0]
+                })
 
+            function redraw(lines) {
+                var line = d3.selectAll(lines)
+                .transition()
+                .duration(200)
+                    .attr('x2', function (d, i) {
+                        if(d.lines && i <= lastLine) {
+                            var a                = d.lines.change[1][0]
+                            return x(a) + (x.rangeBand()/2)
+                        }
+                        return x(0) + (x.rangeBand()/2)
+                    })
+                    .attr('y2', function (d, i) {
+                        if(d.lines && i <= lastLine) {
+                            var a                = d.lines.change[1][1]
+                            return y(a)
+                        }
+                        return greyY[0]
+                    })
+                return line
+            }
+            function resetLine(line, y) {
+                var line = d3.selectAll(line)
+                    .attr('x2', function (d, i) {
+                        return x(0) + (x.rangeBand()/2)
+                    })
+                    .attr('y2', function (d, i) {
+                        return y
+                    })
+                return line
+            }
             $('.hide').hide()
             $('.bar').mouseover(function() {
                 var a                = $(this).attr('index')
                 var b                = $('line[index="'+a+'"]')
+
+                redraw('line[index="'+a+'"]')
+
                 b.show()
                 $('.show').hide()
             })
             $('.bar').mouseout(function() {
                 var a                = $(this).attr('index')
                 var b                = $('line[index="'+a+'"]')
+                var c                = b.get(0)
+                var d                = b.get(1)
+                console.log(c)
+                console.log(d)
+                var f = resetLine(c, greyY[0])
+                var e = resetLine(b, greyY[0]+greyH[0])
+                console.log(f)
+                console.log(e)
+
                 b.hide()
                 $('.show').show()
             })
 
-/*            plotLines.append('line')
-                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
-                .attr('y1', greyY[0])
-                .attr('x2', ( x(xMax.length-1) + (x.rangeBand()/2) ))
-                .attr('y2', (greenH[xMax.length-1] + greenY[xMax.length-1] ))
-                .attr('style', 'stroke: #C00; stroke-width: 1; stroke-opacity: 1;')
-
-
-            // create and assign data to plot lines
-            var plotLines = svg.append('g')
-                .attr('class','plotLines')
-                .attr('transform', 'translate('+left+', '+top+')')
-            var linesData                    = []
-            for(i in data) {
-                if(data[i].lines) {
-                    linesData[i]             = data[i].lines.progress
-                }
-            }
-
-            var plot = plotLines.selectAll('.plot')
-                .data(linesData)
-            // Draw line for plot
-            .enter().append('line')
-                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
-                .attr('y1', greyY[0])
-                .attr('x2', function (d, i) {
-                    console.log(d)
-                    return x(d[1][0]) + (x.rangeBand()/2)
-                })
-                .attr('y2', function (d, i) {
-                    return y(d[1][1])
-                })
-                .attr('style', function (d, i) {
-                    console.log(i)
-                    if((xMax.length-1) == i) {
-                        return 'stroke: #0C0; stroke-width: 2; stroke-opacity: 0.4;'
-                    } else {
-                        return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.1;'
-                    }
-                })
-*/
         }
 
     </script>
