@@ -546,7 +546,6 @@ def project_stats_transform( results, style ):
             # keep copying it and advancing its date 'til we reach the date in
             # the current rec.
             recymd		= date_components( rec["date"] )
-            rec["label"]	= rec["date"]
             print "Process %s" %( repr( recymd ))
             while filled: # (Skip for very first record, otherwise loop forever)
                 old		= filled[-1]
@@ -563,7 +562,6 @@ def project_stats_transform( results, style ):
                 nxt		= copy.deepcopy( old )
                 nxt["date#"]	= time.mktime( nxtdtm.timetuple() )
                 nxt["date"]	= nxtdtm.strftime( "%Y-%m-%d" )
-                nxt["label"]	= nxt["date"]
                 nxt["blob"]	= None
                 for d in "estimated", "work":
                     for k, v in list( nxt[d].items() ):
@@ -572,8 +570,10 @@ def project_stats_transform( results, style ):
                             nxt[d][k+"#"]	= 0
 
                 print "Filling %s" % ( repr( nxtymd ))
+                nxt["label"]	= "Day %d" % ( len( filled ) + 1 )
                 filled.append( nxt )
             print "Copying %s" % ( repr( recymd ))
+            rec["label"]	= "Day %d" % ( len( filled ) + 1 )
             filled.append( rec )
     else:
         raise Exception( "Unkown style: %s" % ( style ))
