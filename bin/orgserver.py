@@ -604,14 +604,14 @@ def project_stats_transform( results, style ):
         cx0			= 0
         cy0			= 0
         cx1			= i
-        cy1			= rec["estimated"]["deltaTotal#"]
+        cy1			= -rec["estimated"]["deltaTotal#"]
         cslope			= float(cy0 - cy1) / float(cx0 - cx1)
 
         lines["progress"]	= [(px0, py0), (px1, py1)]
         lines["change"]		= [(cx0, cy0), (cx1, cy1)]
 
-        print "Record %d: progress: %24s, %f" % ( i, repr( lines["progress"] ), pslope )
-        print "Record %d: change:   %24s, %f" % ( i, repr( lines["change"] ),   cslope )
+        print "Record %d: progress: %-32s, %f slope" % ( i, repr( lines["progress"] ), pslope )
+        print "Record %d: change:   %-32s, %f slope" % ( i, repr( lines["change"] ),   cslope )
 
 
 
