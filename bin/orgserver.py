@@ -582,29 +582,37 @@ def project_stats_transform( results, style ):
 
     # Compute the burndown lines for each record.  The first record doesn't have
     # one (as there is no slope), nor does any empty record (one with no "list"
-    # entry).
-    rec				= None, None
-    for x in xrange( len( results["list"] )):
-        rec			= results["list"][x]
-        if x == 0:
-            continue
+    # entry).  Presently, we'll just use a linear average between the first and
+    # current record, over (todoTotal - addedTotal) for our "progress" line, and
+    # over (deltaTotal) for our "change" line.
+
+    rec, one			= None, None
+    if results["list"]:
+        one			= results["list"][0]
+    for i in xrange( 1, len( results["list"] )):
+        rec			= results["list"][i]
         print "Computing lines for %s" % ( json.dumps( rec, indent=4 ))
         lines = rec["lines"]	= {}
-        prgs = lines["progress"]= []
-        x                       = 0
-        y                       = rec["estimated"]["todoTotal#"]
-        prgs.append((x, y))
-        x                       = len( results )
-        y			= 0
-        prgs.append((x, y))
+        px0                     = 0
+        py0                     =      one["estimated"]["todoTotal#"] - one["estimated"]["deltaTotal#"]
 
-        efrt = lines["effort"]	= []
-        x			= 0
-        y			= 0
-        efrt.append((x, y))
-        x			= len( results )
-        y			= 0
-        efrt.append((x, y))
+        px1                     = i
+        py1			= (  ( one["estimated"]["todoTotal#"] - one["estimated"]["deltaTotal#"] )
+                                   - ( rec["estimated"]["todoTotal#"] - rec["estimated"]["deltaTotal#"] ))
+        pslope			= float(py0 - py1) / float(px0 - px1)
+
+        cx0			= 0
+        cy0			= 0
+        cx1			= i
+        cy1			= rec["estimated"]["deltaTotal#"]
+        cslope			= float(cy0 - cy1) / float(cx0 - cx1)
+
+        lines["progress"]	= [(px0, py0), (px1, py1)]
+        lines["change"]		= [(cx0, cy0), (cx1, cy1)]
+
+        print "Record %d: progress: %24s, %f" % ( i, repr( lines["progress"] ), pslope )
+        print "Record %d: change:   %24s, %f" % ( i, repr( lines["change"] ),   cslope )
+
 
 
 def deduce_encoding( available, environ, accept=None ):
