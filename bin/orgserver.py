@@ -18,7 +18,9 @@ api/data/<project>/<time-style>
 
 """
 import argparse
+import copy
 import cgi
+import datetime
 import json
 import re
 import socket
@@ -319,9 +321,9 @@ def parse_task_heirarchy( lines ):
     return stack[0]
 
 
-def project_data_parse( data, project, style ):
+def project_data_parse( data, project ):
     """Return the parsed org-mode project statistics data for one
-    project, from the supplied data, with the specified x-axis style.
+    project, from the supplied data.
 
     Searches each blob for an org-mode table like:
 
@@ -339,13 +341,13 @@ def project_data_parse( data, project, style ):
     | *** DONE Create Python web server                      |   8:00 |     7:00 |
     #+END:
 
-    From this we harvest the aggregate data, and track the
-    state-changes of tasks.  We'll create a tree of task objects,
-    containing roll-up statistics of all of the sub-tasks in each
-    state.
+    From this we harvest the aggregate data, and track the state-changes of
+    tasks.  We'll create a tree of task objects, containing roll-up statistics
+    of all of the sub-tasks in each state.
 
-    Cache the raw task statistical data, to avoid having to reparse
-    it.  The same blog may appear in many consecutive commits...
+    Cache the raw task statistical data, to avoid having to reparse it.  The
+    same blog may appear in many consecutive commits...
+
     """
     # cache[blob.hexsha] == {"todo": {}, ...} or None.
     cache			= project_data_parse.cache
@@ -353,7 +355,6 @@ def project_data_parse( data, project, style ):
     results			= {}
 
     results["project"]		= project
-    results["style"]		= style
     results["list"]		= []
 
     # Traverse the (from oldest to newest) list, collecting the
@@ -399,17 +400,17 @@ def project_data_parse( data, project, style ):
             print "Commit contains same blob as last; skipping"
             continue
         if stats and ahead["date"] == stats["date"]:
-            # This record contains the same date as the last; must be
-            # a later commit on the same day.  Use its data instead;
-            # throw away the last record computed, and ensure we
-            # retain  the same old, prior for this round...
-            print "Commit contains same date as last; redoing"
+            # This record contains the same date as the last; must be a later
+            # commit on the same day. 0 Use its data instead; throw away the
+            # last record computed, and ensure we retain the same old, prior for
+            # this round...
+            print "Commit contains same date; re-doing %r" % ahead["date"]
             results["list"]	= results["list"][:-1]
             rec, stats		= old, prior
 
-        # Remember this round's task's rec/stats in old/prior, to
-        # compute the next round's differences.  Now safe to advance
-        # ahead to the stats just loaded.
+        # Remember this round's task's rec/stats in old/prior, to compute the
+        # next round's differences.  Now safe to advance ahead to the stats just
+        # loaded.
         old, prior		= rec, stats
         stats			= ahead
 
@@ -420,12 +421,12 @@ def project_data_parse( data, project, style ):
         rec["date"]		= stats["date"]
         rec["date#"]		= stats["date#"]
 
-        dicts			= [		# (first is most likely to contain *all* columns!)
+        dicts			= [		# (first contains *all* columns!)
             "total", "project",			# Overall sums
             "todo", "todoTotal",
             "done", "doneTotal",		# Done since last, and sum total
             "removed", "removedTotal",		# Existing tasks cancelled
-            "added", "addedTotal",		# New tasks added/uncancelled, and sum total
+            "added", "addedTotal",		# New tasks added/uncancelled
             "delta", "deltaTotal",		# net change and total change
         ]
         if dicts[0] not in stats:
@@ -460,8 +461,8 @@ def project_data_parse( data, project, style ):
             stats["project"]	= stats["todoTotal"] + stats["doneTotal"]
             stats["total"]	= stats["project"] + stats["removedTotal"]
             if prior:
-                stats["todo"]		= stats["todoTotal"]    - prior["todoTotal"]
-                stats["done"]		= stats["doneTotal"]    - prior["doneTotal"]
+                stats["todo"]	= stats["todoTotal"]    - prior["todoTotal"]
+                stats["done"]	= stats["doneTotal"]    - prior["doneTotal"]
                 # Added is the sum of: a) the the absolute increase in
                 # the total project size (including all tasks, even
                 # cancelled),
@@ -469,14 +470,14 @@ def project_data_parse( data, project, style ):
                 # PLUS b) any existing tasks changed from cancelled to
                 # something else; if "removed" goes -'ve, this really
                 # means "added"; never let "removed" go -'ve.
-                stats["removed"]	= stats["removedTotal"] - prior["removedTotal"]
-                for k, v in list( stats["removed"].iteritems() ):
+                stats["removed"]= stats["removedTotal"] - prior["removedTotal"]
+                for k, v in list( stats["removed"].items() ):
                     if v < 0:
-                        stats["added"]         += (k, -v)
-                        stats["removed"]       += (k, -v)
-                stats["addedTotal"]     = stats["added"]	+ prior["addedTotal"]
-                stats["delta"]          = stats["added"]        - stats["removed"]
-                stats["deltaTotal"]     = stats["delta"]	+ prior["deltaTotal"]
+                        stats["added"]   += (k, -v)
+                        stats["removed"] += (k, -v)
+                stats["addedTotal"] = stats["added"]	+ prior["addedTotal"]
+                stats["delta"]      = stats["added"]	- stats["removed"]
+                stats["deltaTotal"] = stats["delta"]	+ prior["deltaTotal"]
 
             # If there were no results for a stat (eg. no tasks in the
             # given state), ensure that the resultant timedict at
@@ -517,11 +518,65 @@ def project_data_parse( data, project, style ):
                 rec[n][d+"#"]		= stats[d][i]
 
         results["list"].append( rec )
+        print "Adding record %3d for %r" % ( len( results["list"] ),  rec["date"] )
 
     return results
 
 project_data_parse.cache	= {}
 
+
+def project_stats_transform( results, style ):
+    """
+    Transform the project stats in-place, into the specified x-axis style.  The incoming
+    data is assumed to be raw project data, in standard elapsed (calendar) time.
+    """
+    results["style"]		= style
+
+    def date_components( date ):
+        """YYYY-MM-DD" --> (y, m, d)"""
+        y, m, d			=  ( int(x) for x in date.split( '-' ))
+        return y, m, d
+
+    filled			= []
+    rec, old			= None, None
+    if style == "elapsed":
+        # Fill in missing elapsed time entries in 'filled'.
+        for rec in results["list"]:
+            # Take the date of 'old' (the last record in the filled list), and
+            # keep copying it and advancing its date 'til we reach the date in
+            # the current rec.
+            recymd		= date_components( rec["date"] )
+            print "Process %s" %( repr( recymd ))
+            while filled: # (Skip for very first record, otherwise loop forever)
+                old		= filled[-1]
+                oldymd		= date_components( old["date"] )
+                if oldymd >= recymd:
+                    print "old: %s" % json.dumps( old, indent=4 )
+                    print "rec: %s" % json.dumps( rec, indent=4 )
+                    raise Exception( "Out of order records! %r (%s) >= %r (%s)" %( oldymd, old["date"], recymd, rec["date"] ))
+                nxtdtm		= datetime.datetime( *oldymd ) + datetime.timedelta( 1 )
+                nxtymd		= ( nxtdtm.year, nxtdtm.month, nxtdtm.day )
+                if nxtymd >= recymd:
+                    break
+
+                nxt		= copy.deepcopy( old )
+                nxt["date"]	= nxtdtm.strftime( "%Y-%m-%d" )
+                nxt["date#"]	= time.mktime( nxtdtm.timetuple() )
+                nxt["blob"]	= None
+                for d in "estimated", "work":
+                    for k, v in list( nxt[d].items() ):
+                        if k in ( "added", "removed", "delta", "todo", "done" ):
+                            nxt[d][k]		= "0:00"
+                            nxt[d][k+"#"]	= 0
+
+                print "Filling %s" % ( repr( nxtymd ))
+                filled.append( nxt )
+            print "Copying %s" % ( repr( recymd ))
+            filled.append( rec )
+    else:
+        raise Exception( "Unkown style: %s" % ( style ))
+
+    results["list"]		= filled
 
 
 def deduce_encoding( available, environ, accept=None ):
@@ -757,15 +812,19 @@ def data_request( repository, project, path,
         # Invalid project/style requested.  Return 404 Not Found
         raise http_exception( framework, 404, e.message )
 
-    # hexsha updated, data[proj] available.  Check that our cached
-    # data still valid and/or exists, and go parse it if not.
+    # hexsha updated, data[proj] available.  Check that our cached data still
+    # valid and/or exists, and go parse it if not.
     if data_request.hexsha != hexsha:
         data_request_hexsha	= hexsha
         data_request.cache	= {}
     stats			= data_request.cache.get( proj, None )
     if not stats:
-        stats                   = project_data_parse( data, proj, style )
+        stats                   = project_data_parse( data, proj )
         data_request.cache[proj]= stats
+
+
+    # Transform the raw stats into the desired x-axis style.
+    project_stats_transform( stats, style )
 
     response			= None
     if accept == "application/json":
