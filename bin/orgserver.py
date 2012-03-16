@@ -526,9 +526,9 @@ project_data_parse.cache	= {}
 
 
 def project_stats_transform( results, style ):
-    """
-    Transform the project stats in-place, into the specified x-axis style.  The incoming
-    data is assumed to be raw project data, in standard elapsed (calendar) time.
+    """Transform the project stats in-place, into the specified x-axis style.
+    The incoming data is assumed to be raw project data, in standard elapsed
+    (calendar) time.  Adds a "label" field to each entry.
     """
     results["style"]		= style
 
@@ -546,6 +546,7 @@ def project_stats_transform( results, style ):
             # keep copying it and advancing its date 'til we reach the date in
             # the current rec.
             recymd		= date_components( rec["date"] )
+            rec["label"]	= rec["date"]
             print "Process %s" %( repr( recymd ))
             while filled: # (Skip for very first record, otherwise loop forever)
                 old		= filled[-1]
@@ -560,8 +561,9 @@ def project_stats_transform( results, style ):
                     break
 
                 nxt		= copy.deepcopy( old )
-                nxt["date"]	= nxtdtm.strftime( "%Y-%m-%d" )
                 nxt["date#"]	= time.mktime( nxtdtm.timetuple() )
+                nxt["date"]	= nxtdtm.strftime( "%Y-%m-%d" )
+                nxt["label"]	= nxt["date"]
                 nxt["blob"]	= None
                 for d in "estimated", "work":
                     for k, v in list( nxt[d].items() ):
