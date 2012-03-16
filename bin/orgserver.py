@@ -585,11 +585,15 @@ def project_stats_transform( results, style ):
     # one (as there is no slope), nor does any empty record (one with no "list"
     # entry).  Presently, we'll just use a linear average between the first and
     # current record, over (todoTotal - addedTotal) for our "progress" line, and
-    # over (deltaTotal) for our "change" line.
+    # over (deltaTotal) for our "change" line.  Compute the project finish-x
+    # 'fx' (None if not computable)
 
+    fxmax			= None
+    fxlimit			= 10 # Allow expanding the results by this factor
     rec, one			= None, None
     if results["list"]:
         one			= results["list"][0]
+        one["lines"]		= None
     for i in xrange( 1, len( results["list"] )):
         rec			= results["list"][i]
         print "Computing lines for %s" % ( json.dumps( rec, indent=4 ))
@@ -655,13 +659,32 @@ def project_stats_transform( results, style ):
             fx			= ( pC - cC ) / ( cslope - pslope )
             print "Slopes will intercept in future at x=%f" % ( fx )
 
-            fx                  = int( math.ceil( fx ))
+            fx                  = min( int( math.ceil( fx )), fxlimit * len( results["list"] ))
+            fxmax		= max( fx, fxmax or 0 )
 
             lines["progress"]=[(px0, py0), (fx, int( math.ceil( pslope * fx + pC )))]
             lines["change"]  =[(cx0, cy0), (fx, int( math.ceil( cslope * fx + cC )))]
         else:
             print "Slopes will intercept in past"
 
+
+    # We've computed a finish-x.  Fill in the results["list"] with empty records.
+    print "Need %d total records; adding %d" % (( fxmax or 0 ) + 1, fxmax - len( results["list"] ) + 1 )
+    while fxmax and fxmax >= len( results["list"] ):
+        rec			= copy.deepcopy( results["list"][-1] )
+        recymd			= date_components( rec["date"] )
+        nxtdtm			= datetime.datetime( *recymd ) + datetime.timedelta( 1 )
+        rec["date#"]		= time.mktime( nxtdtm.timetuple() )
+        rec["date"]		= nxtdtm.strftime( "%Y-%m-%d" )
+        rec["label"]		= "Day %d" % ( len( results["list"] ) + 1 )
+        rec["blob"]		= None
+        rec["lines"]            = None
+        for d in "estimated", "work":
+            for k, v in list( rec[d].items() ):
+                rec[d][k]	= "0:00"
+                rec[d][k+"#"]	= 0
+        print "Extend  %s" % ( rec["date"] )
+        results["list"].append( rec )
 
 
 def deduce_encoding( available, environ, accept=None ):
