@@ -18,10 +18,11 @@ api/data/<project>/<time-style>
 
 """
 import argparse
-import copy
 import cgi
+import copy
 import datetime
 import json
+import math
 import re
 import socket
 import string
@@ -600,13 +601,13 @@ def project_stats_transform( results, style ):
         px1                     = i
         py1			= (  rec["estimated"]["todoTotal#"]
                                    - rec["estimated"]["deltaTotal#"] )
-        pslope			= (py0 - py1) / (px0 - px1)
+        pslope			= float(py0 - py1) / (px0 - px1)
 
         cx0			= 0
         cy0			= 0
         cx1			= i
         cy1			= -rec["estimated"]["deltaTotal#"]
-        cslope			= (cy0 - cy1) / (cx0 - cx1)
+        cslope			= float(cy0 - cy1) / (cx0 - cx1)
 
         lines["progress"]	= [(px0, py0), (px1, py1)]
         lines["change"]		= [(cx0, cy0), (cx1, cy1)]
@@ -648,20 +649,18 @@ def project_stats_transform( results, style ):
         #     y = mx + C
         #     y = m((c - b) / (m-n)) + C
         #
-        if pslope != cslope:
-            if cslope - pslope > 0:
-                pC		= py0 - pslope * px0
-                cC		= cy0 - cslope * cx0
-                fx		= ( pC - cC ) / ( cslope - pslope )
-                fy		= pslope * fx + pC
-                print "Slopes will intercept in future at %s" % ( repr( (fx, fy) ))
+        if cslope - pslope > 0:
+            pC			= py0 - pslope * px0
+            cC			= cy0 - cslope * cx0
+            fx			= ( pC - cC ) / ( cslope - pslope )
+            print "Slopes will intercept in future at x=%f" % ( fx )
 
-                lines["progress"]=[(px0, py0), (fx, pslope * fx + pC)]
-                lines["change"]  =[(cx0, cy0), (fx, cslope * fx + cC)]
-            else:
-                print "Slopes will intercept in past"
+            fx                  = int( math.ceil( fx ))
+
+            lines["progress"]=[(px0, py0), (fx, int( math.ceil( pslope * fx + pC )))]
+            lines["change"]  =[(cx0, cy0), (fx, int( math.ceil( cslope * fx + cC )))]
         else:
-            print "Slopes will never intercept"
+            print "Slopes will intercept in past"
 
 
 
