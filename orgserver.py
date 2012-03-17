@@ -1089,16 +1089,13 @@ if __name__ == "__main__":
                 """Forward to an appropriate start page.  Detect if behind a
                 proxy, and use the original forwarded host.
                 """
-                web.seeother( "/static/burn-down-charts.html" )
-                '''
                 # print json.dumps(web.ctx, skipkeys=True, default=repr, indent=4,)
                 proxy		= web.ctx.environ.get( "HTTP_X_FORWARDED_HOST", "" )
                 if proxy:
-                    proxy	= "http://" + proxy + "/"
-                target		= proxy + "api/projects"
-                # print "Redirect / to %s" % ( target )
-                raise web.Redirect( target )
-                '''
+                    proxy	= "http://" + proxy
+                target		= proxy + "/static/burn-down-charts.html"
+                print "Redirect / to %s" % ( target )
+                web.seeother( target )
 
         class projects:
             def GET( self ):
