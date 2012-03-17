@@ -76,6 +76,24 @@
                 new drawGraph(d)
             }
         })
+
+        $.ajax({
+            url: '/api/projects.json',
+            dataType: 'jsonp',
+            success: function(d) {
+                data             = d
+                new fillMenu(d)
+            }
+        })
+
+        function fillMenu(data) {
+            var items	= "";
+            for (proj in data) {
+                items += '<li><a href="#">' + data[proj].project + '</a></li>'
+            }
+            $('.dropdown-menu').html(items);
+        }
+
         // capitalizes to first letter in string
         String.prototype.capitalize = function() {
             return this.charAt(0).toUpperCase() + this.slice(1);

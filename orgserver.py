@@ -596,7 +596,7 @@ def project_stats_transform( results, style ):
         one["lines"]		= None
     for i in xrange( 1, len( results["list"] )):
         rec			= results["list"][i]
-        print "Computing lines for %s" % ( json.dumps( rec, indent=4 ))
+
         lines = rec["lines"]	= {}
         px0                     = 0
         py0                     = (  one["estimated"]["todoTotal#"]
@@ -659,7 +659,8 @@ def project_stats_transform( results, style ):
             fx			= ( pC - cC ) / ( cslope - pslope )
             print "Slopes will intercept in future at x=%f" % ( fx )
 
-            fx                  = min( int( math.ceil( fx )), fxlimit * len( results["list"] ))
+            fx                  = min( int( math.ceil( fx )),
+                                       fxlimit * len( results["list"] ))
             fxmax		= max( fx, fxmax or 0 )
 
             lines["progress"]=[(px0, py0), (fx, int( math.ceil( pslope * fx + pC )))]
