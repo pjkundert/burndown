@@ -618,8 +618,8 @@ def project_stats_transform( results, style ):
         cy1			= -rec["estimated"]["deltaTotal#"]
         cslope			= float(cy0 - cy1) / (cx0 - cx1)
 
-        lines["progress"]	= [(px0, py0), (px1, py1)]
-        lines["change"]		= [(cx0, cy0), (cx1, cy1)]
+        lines["progress"]	= {"x1": px0, "y1": py0, "x2": px1, "y2": py1} # [(px0, py0), (px1, py1)]
+        lines["change"]		= {"x1": cx0, "y1": cy0, "x2": cx1, "y2": cy1} # [(cx0, cy0), (cx1, cy1)]
 
         print "Record %d: progress: %-32s, %f slope" % (
             i, repr( lines["progress"] ), pslope )
@@ -668,8 +668,8 @@ def project_stats_transform( results, style ):
                                        fxlimit * len( results["list"] ))
             fxmax		= max( fx, fxmax or 0 )
 
-            lines["progress"]=[(px0, py0), (fx, int( math.ceil( pslope * fx + pC )))]
-            lines["change"]  =[(cx0, cy0), (fx, int( math.ceil( cslope * fx + cC )))]
+            lines["progress"]= {"x1": px0, "y1": py0, "x2": fx, "y2": int( math.ceil( pslope * fx + pC ))} # [(px0, py0), (fx, int( math.ceil( pslope * fx + pC )))]
+            lines["change"]  = {"x1": cx0, "y1": cy0, "x2": fx, "y2": int( math.ceil( cslope * fx + cC ))} # [(cx0, cy0), (fx, int( math.ceil( cslope * fx + cC )))]
         else:
             print "Slopes will intercept in past"
 

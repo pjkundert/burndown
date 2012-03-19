@@ -35,6 +35,16 @@
     </style>
 </head>
 <body style="background-color: #EEE;">
+    <div class="modal" id="alert" style=" display: none;">
+        <div class="modal-body">
+            <div class="alert alert-error"
+                 style="margin-bottom: 0;">
+                <a class="close" data-dismiss="modal">×</a>
+                <h2 class="alert-heading">Ajax Error!</h2>
+                <span class="message">Ajax message here...</span>
+            </div>
+        </div>
+    </div>
     <div class="navbar navbar-fixed-top">
         <div class="navbar-inner">
             <div class="container">
@@ -53,7 +63,7 @@
         </div>
     </div>
     <div id="container" class="container">
-        <div class="chart">
+        <div class="graph-container">
         </div>
     </div>
     <script src="bootstrap/prettify//prettify.js"
@@ -67,16 +77,11 @@
     <script type="text/javascript">
         var data;
         var fn;
-        // Get project json object from api and send it to drawGraph
-        $.ajax({
-            url: '/api/data/test/elapsed.json',
-            dataType: 'jsonp',
-            success: function(d) {
-                data             = d
-                new drawGraph(d)
-            }
+        $('#alert').modal({
+            backdrop:   true,
+            show:       false,
+            background: false
         })
-
         $.ajax({
             url: '/api/projects.json',
             dataType: 'jsonp',
@@ -86,12 +91,54 @@
             }
         })
 
+        function ajaxError(message, jxr) {
+            var html = [];
+            html.push('<span class="label label-important">Error '+jxr.status+':</span>')
+            html.push('<span class="text" style="display: block; padding: 6px 0 0 20px;">'+message+'</span>')
+            $('#alert .message').html(html.join(''))
+            return $('#alert').modal('show')
+        }
+
+        function loadProject(data) {
+            var p
+            , t = $.type(data)
+
+            if(t=='object') {
+                p = data.project
+            } else if(t=='string') {
+                p = data
+            }
+
+            // Get project json object from api and send it to drawGraph
+            $.ajax({
+                url: '/api/data/' + p + '/elapsed.json',
+                dataType: 'jsonp',
+                success: function(d) {
+                    data             = d
+                    new drawGraph(d)
+                },
+                error: function(jxr, s, m) {
+                    console.log(jxr)
+                    ajaxError(m, jxr)
+                },
+            })
+        }
+
         function fillMenu(data) {
+            // Received Project list.  Populate dropdown-menu, and dispatch
+            // initial default project data load.  Each project has an <a
+            // href... /> with an id of "project-link"
             var items	= "";
             for (proj in data) {
-                items += '<li><a href="#">' + data[proj].project + '</a></li>'
+                var a       = data[proj].project
+                items      += '<li><a href="#" project="'+a+'">'+a+'</a></li>'
             }
             $('.dropdown-menu').html(items);
+
+            $(document).on("click",'.dropdown-menu li a', function () {
+                loadProject($(this).attr('project'))
+            })
+            loadProject(data[0])
         }
 
         // capitalizes to first letter in string
@@ -100,6 +147,7 @@
         }
 
         function drawGraph(data) {
+            $('.graph-container').html('')
             //   json object structure:
             //   {
             //       list:        Array,   # data array
@@ -166,7 +214,8 @@
                 .range([gHeight, 0])
 
             // Create SVG element
-            var svg = d3.select('.chart').append('svg')
+            var svg = d3.select('.graph-container').append('svg')
+                .attr('class', 'graph')
                 .attr('width', w)
                 .attr('height', h)
                 .attr('style', 'display: block; margin: 0 auto;')
@@ -252,6 +301,13 @@
 
             bars.append('rect')
                 .attr('class', 'bar')
+                .attr('drawline', function(d, i) {
+                    if(i==0) {
+                        return 'false'
+                    } else {
+                        return 'true'
+                    }
+                })
                 .attr('index', function (d, i) {
                     return i
                 })
@@ -389,6 +445,8 @@
                     return xMax[i]
                 })
 
+            var plotData = []
+
             // create and assign data to plot lines
             var plotLines = svg.append('g')
                 .attr('class','plotLines')
@@ -397,13 +455,25 @@
                 .data(data)
             // Draw line for plot
             .enter().append('line')
-                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
-                .attr('y1', greyY[0])
+                .attr('x1', function (d, i) {
+                    if(d.lines) {
+                        return x(d.lines.progress.x1) + (x.rangeBand()/2)
+                    }
+                })
+                .attr('y1', function (d, i) {
+                    if(d.lines) {
+                        return y(d.lines.progress.y1)
+                    }
+                })
                 .attr('x2', function (d, i) {
-                    return x(0) + (x.rangeBand()/2)
+                    if(d.lines) {
+                        return x(d.lines.progress.x1) + (x.rangeBand()/2)
+                    }
                 })
                 .attr('y2', function (d, i) {
-                    return greyY[0]
+                    if(d.lines) {
+                        return y(d.lines.progress.y1)
+                    }
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #C00; stroke-width: 2; stroke-opacity: 0.6;'
@@ -420,17 +490,25 @@
                 })
             .transition()
             .delay(500)
-            .duration(500)
+            .duration(100)
                 .attr('x2', function (d, i) {
+
                     if(lastLine == i) {
-                        var a                = d.lines.progress[1][0]
+                        var a                = d.lines.progress.x2
                         return x(a) + (x.rangeBand()/2)
                     }
+                    var pd = {
+                        x1: ( x(0) + (x.rangeBand()/2) ),
+                        y1: greyY[0],
+                        x2: a,
+                        y2: a
+                    }
+                    plotData.push()
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
                     if(lastLine == i) {
-                        var a                = d.lines.progress[1][1]
+                        var a                = d.lines.progress.y2
                         return y(a)
                     }
                     return greyY[0]
@@ -444,13 +522,25 @@
                 .data(data)
             // Draw line for plot
             .enter().append('line')
-                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
-                .attr('y1', greyY[0]+greyH[0])
+                .attr('x1', function (d, i) {
+                    if(d.lines) {
+                        return x(d.lines.change.x1) + (x.rangeBand()/2)
+                    }
+                })
+                .attr('y1', function (d, i) {
+                    if(d.lines) {
+                        return y(d.lines.change.y1)
+                    }
+                })
                 .attr('x2', function (d, i) {
-                    return x(0) + (x.rangeBand()/2)
+                    if(d.lines) {
+                        return x(d.lines.change.x1) + (x.rangeBand()/2)
+                    }
                 })
                 .attr('y2', function (d, i) {
-                    return greyY[0]+greyH[0]
+                    if(d.lines) {
+                        return y(d.lines.change.y1)
+                    }
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.6;'
@@ -467,17 +557,17 @@
                 })
             .transition()
             .delay(500)
-            .duration(500)
+            .duration(100)
                 .attr('x2', function (d, i) {
                     if(lastLine == i) {
-                        var a                = d.lines.change[1][0]
+                        var a                = d.lines.change.x2
                         return x(a) + (x.rangeBand()/2)
                     }
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
                     if(lastLine == i) {
-                        var a                = d.lines.change[1][1]
+                        var a                = d.lines.change.y2
                         return y(a)
                     }
                     return greyY[0]+greyH[0]
@@ -486,17 +576,17 @@
             function redraw(lines) {
                 var line = d3.selectAll(lines)
                 .transition()
-                .duration(200)
+                .duration(100)
                     .attr('x2', function (d, i) {
                         if(d.lines && i <= lastLine) {
-                            var a                = d.lines.change[1][0]
+                            var a = d.lines.change.x2
                             return x(a) + (x.rangeBand()/2)
                         }
                         return x(0) + (x.rangeBand()/2)
                     })
                     .attr('y2', function (d, i) {
                         if(d.lines && i <= lastLine) {
-                            var a                = d.lines.change[1][1]
+                            var a = d.lines.change.y2
                             return y(a)
                         }
                         return greyY[0]
@@ -514,29 +604,30 @@
                 return line
             }
             $('.hide').hide()
+
             $('.bar').mouseover(function() {
-                var a                = $(this).attr('index')
-                var b                = $('line[index="'+a+'"]')
+                if($(this).attr('drawline')!='false') {
+                    var a                = $(this).attr('index')
+                    var b                = $('line[index="'+a+'"]')
 
-                redraw('line[index="'+a+'"]')
+                    redraw('line[index="'+a+'"]')
 
-                b.show()
-                $('.show').hide()
+                    b.show()
+                    $('.show').hide()
+                }
             })
             $('.bar').mouseout(function() {
-                var a                = $(this).attr('index')
-                var b                = $('line[index="'+a+'"]')
-                var c                = b.get(0)
-                var d                = b.get(1)
-                console.log(c)
-                console.log(d)
-                var f = resetLine(c, greyY[0])
-                var e = resetLine(b, greyY[0]+greyH[0])
-                console.log(f)
-                console.log(e)
+                if($(this).attr('drawline')!='false') {
+                    var a                = $(this).attr('index')
+                    var b                = $('line[index="'+a+'"]')
+                    var c                = b.get(0)
+                    var d                = b.get(1)
+                    var f                = resetLine(c, greyY[0])
+                    var e                = resetLine(d, greyY[0]+greyH[0])
 
-                b.hide()
-                $('.show').show()
+                    b.hide()
+                    $('.show').show()
+                }
             })
 
         }
