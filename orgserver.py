@@ -343,8 +343,8 @@ def project_data_parse( data, project ):
     #+END:
 
     From this we harvest the aggregate data, and track the state-changes of
-    tasks.  We'll create a tree of task objects, containing roll-up statistics
-    of all of the sub-tasks in each state.
+    tasks.  We'll create a tree of task objects from the data parsed from each
+    blob, containing roll-up statistics of all of the sub-tasks in each state.
 
     Cache the raw task statistical data, to avoid having to reparse it.  The
     same blog may appear in many consecutive commits...
@@ -371,16 +371,21 @@ def project_data_parse( data, project ):
             try:
                 print "Parsing blob %s: %s" % ( blob.hexsha, blob.name )
                 ahead           = {}
-                ahead["task"]	= parse_task_heirarchy( iter( blob.data_stream.read().splitlines() ))
+                ahead["task"]	= parse_task_heirarchy(
+                    iter( blob.data_stream.read().splitlines() ))
                 print ahead["task"].display()
 
-                match		= re.search( r"<([0-9-]*)[^>]*>", ahead["task"].description )
+                match		= re.search( r"<([0-9-]*)[^>]*>",
+                                             ahead["task"].description )
                 if match is None:
-                    raise Exception( "No date found in task: %s" % ahead["task"].description )
+                    raise Exception( "No date found in task: %s" % (
+                        ahead["task"].description ))
                 ahead["date"]	= match.group( 1 )
-                ahead["date#"]	= time.mktime( time.strptime( ahead["date"], "%Y-%m-%d" ))
+                ahead["date#"]	= time.mktime( time.strptime( ahead["date"],
+                                                              "%Y-%m-%d" ))
 
-                match		= re.search( r"[Ss]print\s+([0-9-]+)>", ahead["task"].description )
+                match		= re.search( r"[Ss]print\s+([0-9-]+)>",
+                                             ahead["task"].description )
                 sprint		= 0
                 if match is not None:
                     sprint	= int( match.group( 1 ))
@@ -669,8 +674,11 @@ def project_stats_transform( results, style ):
             print "Slopes will intercept in past"
 
 
-    # We've computed a finish-x.  Fill in the results["list"] with empty records.
-    print "Need %d total records; adding %d" % (( fxmax or 0 ) + 1, fxmax - len( results["list"] ) + 1 )
+    # We've computed a finish-x.  Fill in the results["list"] with empty
+    # records.
+    if fxmax is not None:
+        print "Need %d total records; adding %d" % (
+            fxmax + 1, fxmax - len( results["list"] ) + 1 )
     while fxmax and fxmax >= len( results["list"] ):
         rec			= copy.deepcopy( results["list"][-1] )
         recymd			= date_components( rec["date"] )

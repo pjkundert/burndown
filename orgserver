@@ -82,11 +82,12 @@ fi
     fi
 )
 
-# Run the python orgserver.py, savings its PID, and waiting 'til it
-# exits
-CMD="${DIR}/orgserver.py ${OPT} ${ORG} ${PRO}"
-echo "${RUN} Starting: $CMD"
-$CMD &
+# Run the python orgserver.py, savings its PID, and waiting 'til it exits.
+# Since web.py access all /static content relative to its CWD, ensure that we
+# change directory to the proper target before executing.
+CMD="./orgserver.py ${OPT} ${ORG} ${PRO}"
+echo "${RUN} In $DIR, starting: $CMD"
+cd $DIR && $CMD &
 echo $! >> $PID.$$
 wait $!
 if (( $? )); then
