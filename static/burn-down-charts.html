@@ -457,21 +457,23 @@
             .enter().append('line')
                 .attr('x1', function (d, i) {
                     if(d.lines) {
-                        console.log(d)
-                        return x(d.lines.progress[0][0]) + (x.rangeBand()/2)
+                        return x(d.lines.progress.x1) + (x.rangeBand()/2)
                     }
-                })//( x(0) + (x.rangeBand()/2) ))
+                })
                 .attr('y1', function (d, i) {
                     if(d.lines) {
-                        console.log(d)
-                        return y(d.lines.progress[0][1])
+                        return y(d.lines.progress.y1)
                     }
-                })//greyY[0])
+                })
                 .attr('x2', function (d, i) {
-                    return x(0) + (x.rangeBand()/2)
+                    if(d.lines) {
+                        return x(d.lines.progress.x1) + (x.rangeBand()/2)
+                    }
                 })
                 .attr('y2', function (d, i) {
-                    return greyY[0]
+                    if(d.lines) {
+                        return y(d.lines.progress.y1)
+                    }
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #C00; stroke-width: 2; stroke-opacity: 0.6;'
@@ -488,11 +490,11 @@
                 })
             .transition()
             .delay(500)
-            .duration(500)
+            .duration(100)
                 .attr('x2', function (d, i) {
 
                     if(lastLine == i) {
-                        var a                = d.lines.progress[1][0]
+                        var a                = d.lines.progress.x2
                         return x(a) + (x.rangeBand()/2)
                     }
                     var pd = {
@@ -506,7 +508,7 @@
                 })
                 .attr('y2', function (d, i) {
                     if(lastLine == i) {
-                        var a                = d.lines.progress[1][1]
+                        var a                = d.lines.progress.y2
                         return y(a)
                     }
                     return greyY[0]
@@ -520,13 +522,25 @@
                 .data(data)
             // Draw line for plot
             .enter().append('line')
-                .attr('x1', ( x(0) + (x.rangeBand()/2) ))
-                .attr('y1', greyY[0]+greyH[0])
+                .attr('x1', function (d, i) {
+                    if(d.lines) {
+                        return x(d.lines.change.x1) + (x.rangeBand()/2)
+                    }
+                })
+                .attr('y1', function (d, i) {
+                    if(d.lines) {
+                        return y(d.lines.change.y1)
+                    }
+                })
                 .attr('x2', function (d, i) {
-                    return x(0) + (x.rangeBand()/2)
+                    if(d.lines) {
+                        return x(d.lines.change.x1) + (x.rangeBand()/2)
+                    }
                 })
                 .attr('y2', function (d, i) {
-                    return greyY[0]+greyH[0]
+                    if(d.lines) {
+                        return y(d.lines.change.y1)
+                    }
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.6;'
@@ -543,17 +557,17 @@
                 })
             .transition()
             .delay(500)
-            .duration(500)
+            .duration(100)
                 .attr('x2', function (d, i) {
                     if(lastLine == i) {
-                        var a                = d.lines.change[1][0]
+                        var a                = d.lines.change.x2
                         return x(a) + (x.rangeBand()/2)
                     }
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
                     if(lastLine == i) {
-                        var a                = d.lines.change[1][1]
+                        var a                = d.lines.change.y2
                         return y(a)
                     }
                     return greyY[0]+greyH[0]
@@ -562,17 +576,17 @@
             function redraw(lines) {
                 var line = d3.selectAll(lines)
                 .transition()
-                .duration(200)
+                .duration(100)
                     .attr('x2', function (d, i) {
                         if(d.lines && i <= lastLine) {
-                            var a = d.lines.change[1][0]
+                            var a = d.lines.change.x2
                             return x(a) + (x.rangeBand()/2)
                         }
                         return x(0) + (x.rangeBand()/2)
                     })
                     .attr('y2', function (d, i) {
                         if(d.lines && i <= lastLine) {
-                            var a = d.lines.change[1][1]
+                            var a = d.lines.change.y2
                             return y(a)
                         }
                         return greyY[0]
