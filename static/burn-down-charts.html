@@ -67,15 +67,6 @@
     <script type="text/javascript">
         var data;
         var fn;
-        // Get project json object from api and send it to drawGraph
-        $.ajax({
-            url: '/api/data/test/elapsed.json',
-            dataType: 'jsonp',
-            success: function(d) {
-                data             = d
-                new drawGraph(d)
-            }
-        })
 
         $.ajax({
             url: '/api/projects.json',
@@ -87,11 +78,36 @@
         })
 
         function fillMenu(data) {
+            // Received Project list.  Populate dropdown-menu, and dispatch
+            // initial default project data load.  Each project has an <a
+            // href... /> with an id of "project-link"
             var items	= "";
             for (proj in data) {
-                items += '<li><a href="#">' + data[proj].project + '</a></li>'
+                items += '<li><a id="' + proj + '-link" href="#">'
+                    + data[proj].project + '</a></li>'
             }
             $('.dropdown-menu').html(items);
+            for (proj in data) {
+                $('#'+data[proj].project+'-link').live("click", function (){
+                    $.ajax({
+                        url: '/api/data/' + data[proj].project + '/elapsed.json',
+                        dataType: 'jsonp',
+                        success: function(d) {
+                            data             = d
+                            new drawGraph(d)
+                        }
+                    })
+                })
+            }
+            // Get project json object from api and send it to drawGraph
+            $.ajax({
+                url: '/api/data/' + data[0].project + '/elapsed.json',
+                dataType: 'jsonp',
+                success: function(d) {
+                    data             = d
+                    new drawGraph(d)
+                }
+            })
         }
 
         // capitalizes to first letter in string
