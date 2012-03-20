@@ -20,6 +20,7 @@ PRO=${ORG_PROJECTS:-}
 RES=0 # restart any running server
 REF=0 # refresh git repos
 PID=${ORG}/orgserver.pid # +.##### contains PID of this orgserver's orgserver.py
+LOG="-"
 OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
 
 while (( $# > 0 )); do
@@ -30,13 +31,17 @@ while (( $# > 0 )); do
     elif [[ "$1" == "--org" ]]; then
         shift
         ORG=${1}
+    elif [[ "$1" == "--log" ]]; then
+        shift
+        LOG=${1}
     elif [[ "$1" == "--help" ]]; then
         echo "${RUN} [--help] [--refresh] [--restart] [--org <dir>] [<project> ...]"
-        echo "    --help      This help"
-        echo "    --restart   Restart any running server"
-        echo "    --refresh   Refresh Git repositories"
-        echo "    --org <dir> org-mode data Git repository (default: ~/org)"
-        echo "    <project>   <project>.org files to parse (default: project.org)"
+        echo "    --help       This help"
+        echo "    --restart    Restart any running server"
+        echo "    --refresh    Refresh Git repositories"
+        echo "    --org <dir>  org-mode data Git repository (default: ~/org)"
+        echo "    --log <file> Log appending onto file (default: -)"
+        echo "    <project>    <project>.org files to parse (default: project.org)"
     else
         # All remaining options are projects
         PRO="${PRO}${PRO:+ }${1}"
@@ -77,8 +82,8 @@ fi
                 kill $( cat $pid )
                 rm $pid
             fi
-            sleep 1
         done
+        sleep 1
     fi
 )
 
@@ -87,7 +92,11 @@ fi
 # change directory to the proper target before executing.
 CMD="./orgserver.py ${OPT} ${ORG} ${PRO}"
 echo "${RUN} In $DIR, starting: $CMD"
-cd $DIR && $CMD &
+if [[ "$LOG" == "-" ]]; then
+    cd $DIR && $CMD &
+else
+    cd $DIR && $CMD >> $LOG &
+fi
 echo $! >> $PID.$$
 wait $!
 if (( $? )); then

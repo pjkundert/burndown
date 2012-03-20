@@ -455,23 +455,27 @@
             .enter().append('line')
                 .attr('x1', function (d, i) {
                     if(d.lines) {
-                        return x(d.lines.progress.x1) + (x.rangeBand()/2)
+                        return x(d.lines.progress.x1) + x.rangeBand()/2
                     }
+                    return x(0) + x.rangeBand()/2
                 })
                 .attr('y1', function (d, i) {
                     if(d.lines) {
                         return y(d.lines.progress.y1)
                     }
+                    return y(0)
                 })
                 .attr('x2', function (d, i) {
                     if(d.lines) {
                         return x(d.lines.progress.x1) + (x.rangeBand()/2)
                     }
+                    return x(0) + x.rangeBand()/2
                 })
                 .attr('y2', function (d, i) {
                     if(d.lines) {
                         return y(d.lines.progress.y1)
                     }
+                    return y(0)
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #C00; stroke-width: 2; stroke-opacity: 0.6;'
@@ -490,14 +494,14 @@
             .delay(500)
             .duration(100)
                 .attr('x2', function (d, i) {
-                    if( d.lines ) {
+                    if(d.lines) {
                         var a                = d.lines.progress.x2
-                        return x(a) + (x.rangeBand()/2)
+                        return x(a) + x.rangeBand()/2
                     }
-                    return x(0) + (x.rangeBand()/2)
+                    return x(0) + x.rangeBand()/2
                 })
                 .attr('y2', function (d, i) {
-                    if( d.lines ) {
+                    if(d.lines) {
                         var a                = d.lines.progress.y2
                         return y(a)
                     }
@@ -514,23 +518,27 @@
             .enter().append('line')
                 .attr('x1', function (d, i) {
                     if(d.lines) {
-                        return x(d.lines.change.x1) + (x.rangeBand()/2)
+                        return x(d.lines.change.x1) + x.rangeBand()/2
                     }
+                    return x(0) + x.rangeBand()/2
                 })
                 .attr('y1', function (d, i) {
                     if(d.lines) {
                         return y(d.lines.change.y1)
                     }
+                    return y(0)
                 })
                 .attr('x2', function (d, i) {
                     if(d.lines) {
                         return x(d.lines.change.x1) + (x.rangeBand()/2)
                     }
+                    return x(0) + x.rangeBand()/2
                 })
                 .attr('y2', function (d, i) {
                     if(d.lines) {
                         return y(d.lines.change.y1)
                     }
+                    return y(0)
                 })
                 .attr('style', function (d, i) {
                     return 'stroke: #00C; stroke-width: 2; stroke-opacity: 0.6;'

@@ -621,27 +621,39 @@ def project_stats_transform( results, style, bestfit=True ):
     # over (deltaTotal) for our "change" line.  Compute the project finish-x
     # 'fx' (None if not computable)
 
+    change_max			= 10 # Percent change indicating discontinuity
     fxmax			= None
-    fxmultiple			= 10 # Allow expanding the results by this factor
+    fxmultiple			= 5 # Allow expanding the results by this factor
     rec, zro			= None, None
 
     prgrdata			= []
     chngdata			= []
 
     num				= len( results["list"] )
-    if results["list"]:
-        zro			= results["list"][0]
-        zro["lines"]		= None
-        prgrdata.append( (0, (  zro["estimated"]["todoTotal#"]
-                              - zro["estimated"]["deltaTotal#"] )) )
-        chngdata.append( (0, -zro["estimated"]["deltaTotal#"] ) )
 
-    for i in xrange( 1, num ):
+    for i in xrange( num ):
         rec			= results["list"][i]
+        rec["lines"]		= None
+
+        # If the delta (change) in the project is greater than a certain
+        # percentage of the project size, then we'll  assume a "discontinous"
+        # change to the project, and compute fresh slopes.
+        if ( abs( rec["estimated"]["delta#"] )
+             > rec["estimated"]["project#"] * change_max / 100 ):
+            print "Record %d: Discontinuity; %d%% change" % (
+                i,  ( abs( rec["estimated"]["delta#"] ) * 100
+                      / rec["estimated"]["project#"] ))
+            prgrdata		= []
+            chngdata		= []
+
         prgrdata.append( (i, (  rec["estimated"]["todoTotal#"]
                               - rec["estimated"]["deltaTotal#"] )) )
         chngdata.append( (i, -rec["estimated"]["deltaTotal#"] ) )
 
+        if len( chngdata ) <= 1:
+            continue
+
+        # We have at least 2 points!  Compute progress/change slopes.
         lines = rec["lines"]	= {}
         if bestfit:
             px0, py0, pslope	= best_fit( prgrdata )
