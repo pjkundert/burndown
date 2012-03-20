@@ -5,6 +5,21 @@ import textwrap
 import orgserver
 from mathdict import *
 
+def test_best_fit():
+    x, y, s			= orgserver.best_fit( [(0,0), (1,1), (2,2)] )
+    assert abs( y -  0.0 ) < 0.0001
+    assert abs( s -  1.0 ) < 0.0001
+    x, y, s			= orgserver.best_fit( [(1,1), (2,2)] )
+    assert abs( y -  0.0 ) < 0.0001
+    assert abs( s -  1.0 ) < 0.0001
+    x, y, s			= orgserver.best_fit( [(0,-1), (1,0), (2,1), (3,2), (4,3)] )
+    assert abs( y - -1.0 ) < 0.0001
+    assert abs( s -  1.0 ) < 0.0001
+    x, y, s			= orgserver.best_fit( [(0,1)] )
+    assert str( s ) == "inf"
+    assert str( y ) == "nan"
+
+
 def test_task():
     t1 = orgserver.task( "TODO", "Project burndown <2012-03-02 Fri>",
                          [("Effort", "22:00"), ("CLOCKSUM", "24:00")] )

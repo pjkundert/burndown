@@ -445,8 +445,6 @@
                     return xMax[i]
                 })
 
-            var plotData = []
-
             // create and assign data to plot lines
             var plotLines = svg.append('g')
                 .attr('class','plotLines')
@@ -492,26 +490,18 @@
             .delay(500)
             .duration(100)
                 .attr('x2', function (d, i) {
-
-                    if(lastLine == i) {
+                    if( d.lines ) {
                         var a                = d.lines.progress.x2
                         return x(a) + (x.rangeBand()/2)
                     }
-                    var pd = {
-                        x1: ( x(0) + (x.rangeBand()/2) ),
-                        y1: greyY[0],
-                        x2: a,
-                        y2: a
-                    }
-                    plotData.push()
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
-                    if(lastLine == i) {
+                    if( d.lines ) {
                         var a                = d.lines.progress.y2
                         return y(a)
                     }
-                    return greyY[0]
+                    return y(0)
                 })
 
             // create and assign data to plot lines
@@ -559,71 +549,35 @@
             .delay(500)
             .duration(100)
                 .attr('x2', function (d, i) {
-                    if(lastLine == i) {
+                    if ( d.lines ) {
                         var a                = d.lines.change.x2
                         return x(a) + (x.rangeBand()/2)
                     }
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
-                    if(lastLine == i) {
+                    if ( d.lines ) {
                         var a                = d.lines.change.y2
                         return y(a)
                     }
-                    return greyY[0]+greyH[0]
+                    return y(0)
                 })
 
-            function redraw(lines) {
-                var line = d3.selectAll(lines)
-                .transition()
-                .duration(100)
-                    .attr('x2', function (d, i) {
-                        if(d.lines && i <= lastLine) {
-                            var a = d.lines.change.x2
-                            return x(a) + (x.rangeBand()/2)
-                        }
-                        return x(0) + (x.rangeBand()/2)
-                    })
-                    .attr('y2', function (d, i) {
-                        if(d.lines && i <= lastLine) {
-                            var a = d.lines.change.y2
-                            return y(a)
-                        }
-                        return greyY[0]
-                    })
-                return line
-            }
-            function resetLine(line, y) {
-                var line = d3.selectAll(line)
-                    .attr('x2', function (d, i) {
-                        return x(0) + (x.rangeBand()/2)
-                    })
-                    .attr('y2', function (d, i) {
-                        return y
-                    })
-                return line
-            }
             $('.hide').hide()
 
             $('.bar').mouseover(function() {
                 if($(this).attr('drawline')!='false') {
                     var a                = $(this).attr('index')
                     var b                = $('line[index="'+a+'"]')
-
-                    redraw('line[index="'+a+'"]')
-
-                    b.show()
+                    // ordering works for last column, too
                     $('.show').hide()
+                    b.show()
                 }
             })
             $('.bar').mouseout(function() {
                 if($(this).attr('drawline')!='false') {
                     var a                = $(this).attr('index')
                     var b                = $('line[index="'+a+'"]')
-                    var c                = b.get(0)
-                    var d                = b.get(1)
-                    var f                = resetLine(c, greyY[0])
-                    var e                = resetLine(d, greyY[0]+greyH[0])
 
                     b.hide()
                     $('.show').show()
