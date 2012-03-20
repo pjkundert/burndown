@@ -531,7 +531,34 @@ def project_data_parse( data, project ):
 project_data_parse.cache	= {}
 
 
-def project_stats_transform( results, style ):
+def best_fit( points ):
+    """
+    Computes a best-fit line for the given [(x,y), ...] data.  Returns
+    a line equation in  point, slope form x, y, slope.  Make two passes over
+    the data, to avoid subtraction of nearly equal numbers.  See
+
+        http://www.johndcook.com/blog/2008/10/20/comparing-two-ways-to-fit-a-line-to-data/
+    """
+    sx				= 0.0
+    sy				= 0.0
+    stt				= 0.0
+    sts				= 0.0
+    n				= len( points )
+    for x, y in points:
+        sx                     += x
+        sy                     += y
+
+    for x, y in points:
+        t			= x - sx/n
+        stt                    += t*t
+        sts                    += t*y
+
+    slope			= sts/stt           if stt else float( "inf" )
+    intercept			= (sy - sx*slope)/n if n   else 0.0
+    return 0.0, intercept, slope
+
+
+def project_stats_transform( results, style, bestfit=True ):
     """Transform the project stats in-place, into the specified x-axis style.
     The incoming data is assumed to be raw project data, in standard elapsed
     (calendar) time.  Adds a "label" field to each entry.
@@ -559,7 +586,8 @@ def project_stats_transform( results, style ):
                 if oldymd >= recymd:
                     print "old: %s" % json.dumps( old, indent=4 )
                     print "rec: %s" % json.dumps( rec, indent=4 )
-                    raise Exception( "Out of order records! %r (%s) >= %r (%s)" %( oldymd, old["date"], recymd, rec["date"] ))
+                    raise Exception( "Out of order records! %r (%s) >= %r (%s)" %(
+                        oldymd, old["date"], recymd, rec["date"] ))
                 nxtdtm		= datetime.datetime( *oldymd ) + datetime.timedelta( 1 )
                 nxtymd		= ( nxtdtm.year, nxtdtm.month, nxtdtm.day )
                 if nxtymd >= recymd:
@@ -594,37 +622,49 @@ def project_stats_transform( results, style ):
     # 'fx' (None if not computable)
 
     fxmax			= None
-    fxlimit			= 10 # Allow expanding the results by this factor
-    rec, one			= None, None
+    fxmultiple			= 10 # Allow expanding the results by this factor
+    rec, zro			= None, None
+
+    prgrdata			= []
+    chngdata			= []
+
+    num				= len( results["list"] )
     if results["list"]:
-        one			= results["list"][0]
-        one["lines"]		= None
-    for i in xrange( 1, len( results["list"] )):
+        zro			= results["list"][0]
+        zro["lines"]		= None
+        prgrdata.append( (0, (  zro["estimated"]["todoTotal#"]
+                              - zro["estimated"]["deltaTotal#"] )) )
+        chngdata.append( (0, -zro["estimated"]["deltaTotal#"] ) )
+
+    for i in xrange( 1, num ):
         rec			= results["list"][i]
+        prgrdata.append( (i, (  rec["estimated"]["todoTotal#"]
+                              - rec["estimated"]["deltaTotal#"] )) )
+        chngdata.append( (i, -rec["estimated"]["deltaTotal#"] ) )
 
         lines = rec["lines"]	= {}
-        px0                     = 0
-        py0                     = (  one["estimated"]["todoTotal#"]
-                                   - one["estimated"]["deltaTotal#"] )
+        if bestfit:
+            px0, py0, pslope	= best_fit( prgrdata )
+            px0, py0		= int( px0 ), int( py0 )
+            pC			= py0 - pslope * px0
+            px1, py1		= i, int( pslope * i + pC )
+            cx0, cy0, cslope	= best_fit( chngdata )
+            cx0, cy0		= int( cx0 ), int( cy0 )
+            cC			= cy0 - cslope * cx0
+            cx1, cy1		= i, int( cslope * i + cC )
+        else:
+            px0, py0            = prgrdata[0]
+            px1, py1            = prgrdata[i]
+            pslope		= float(py0 - py1) / (px0 - px1)
+            pC			= py0 - pslope * px0
 
-        px1                     = i
-        py1			= (  rec["estimated"]["todoTotal#"]
-                                   - rec["estimated"]["deltaTotal#"] )
-        pslope			= float(py0 - py1) / (px0 - px1)
-
-        cx0			= 0
-        cy0			= 0
-        cx1			= i
-        cy1			= -rec["estimated"]["deltaTotal#"]
-        cslope			= float(cy0 - cy1) / (cx0 - cx1)
+            cx0, cy0		= chngdata[0]
+            cx1, cy1		= chngdata[i]
+            cslope		= float(cy0 - cy1) / (cx0 - cx1)
+            cC			= cy0 - cslope * cx0
 
         lines["progress"]	= {"x1": px0, "y1": py0, "x2": px1, "y2": py1} # [(px0, py0), (px1, py1)]
         lines["change"]		= {"x1": cx0, "y1": cy0, "x2": cx1, "y2": cy1} # [(cx0, cy0), (cx1, cy1)]
-
-        print "Record %d: progress: %-32s, %f slope" % (
-            i, repr( lines["progress"] ), pslope )
-        print "Record %d: change:   %-32s, %f slope" % (
-            i, repr( lines["change"] ),   cslope )
 
         #
         # A line equation is:
@@ -659,20 +699,27 @@ def project_stats_transform( results, style ):
         #     y = m((c - b) / (m-n)) + C
         #
         if cslope - pslope > 0:
-            pC			= py0 - pslope * px0
-            cC			= cy0 - cslope * cx0
             fx			= ( pC - cC ) / ( cslope - pslope )
             print "Slopes will intercept in future at x=%f" % ( fx )
 
-            fx                  = min( int( math.ceil( fx )),
-                                       fxlimit * len( results["list"] ))
-            fxmax		= max( fx, fxmax or 0 )
+            # Compute the number of columns required to contain the point
+            # where the progress and change lines meet.  However, clamp at a
+            # fxmultiple of the length of the current data...  Then, compute
+            # where the progress/change lines  intercept that last bar.  This
+            # will cause the lines to cross exactly at the finish point, even
+            # if it is between two bars.
+            fxnext              = min( int( math.ceil( fx )), fxmultiple * num)
+            fxmax		= max( fxnext, fxmax or 0 )
 
-            lines["progress"]= {"x1": px0, "y1": py0, "x2": fx, "y2": int( math.ceil( pslope * fx + pC ))} # [(px0, py0), (fx, int( math.ceil( pslope * fx + pC )))]
-            lines["change"]  = {"x1": cx0, "y1": cy0, "x2": fx, "y2": int( math.ceil( cslope * fx + cC ))} # [(cx0, cy0), (fx, int( math.ceil( cslope * fx + cC )))]
+            lines["progress"]={"x1":px0, "y1":py0, "x2":fxnext, "y2":int( pslope * fxnext + pC )}
+            lines["change"]  ={"x1":cx0, "y1":cy0, "x2":fxnext, "y2":int( cslope * fxnext + cC )}
         else:
             print "Slopes will intercept in past"
 
+        print "Record %d: progress: %-32s, %f slope (%s)" % (
+            i, repr( lines["progress"] ), pslope, "best-fit" if bestfit else "linear")
+        print "Record %d: change:   %-32s, %f slope" % (
+            i, repr( lines["change"] ),   cslope )
 
     # We've computed a finish-x.  Fill in the results["list"] with empty
     # records.
@@ -892,9 +939,11 @@ def data_request( repository, project, path,
                   framework=None ):
     """Return the project data specified by path:
 
-           .../<project>[/<style>]
+           .../<project>[/<style>][?linear]
 
     We'll parse the historical org-mode data, and cache it based on the
+    hash of the commit.  The optional linear query option will changed
+    from best-fit to linear estimation.
     """
     accept		= deduce_encoding( [ "application/json", "text/html" ],
                                            environ=environ, accept=accept )
@@ -940,7 +989,9 @@ def data_request( repository, project, path,
 
 
     # Transform the raw stats into the desired x-axis style.
-    project_stats_transform( stats, style )
+    print repr( queries )
+    project_stats_transform( stats, style,
+                             bestfit=(( "linear" not in queries ) if queries else True ))
 
     response			= None
     if accept == "application/json":
