@@ -22,10 +22,12 @@ import cgi
 import copy
 import datetime
 import json
+import logging
 import math
 import re
 import socket
 import string
+import sys
 import textwrap
 import time
 
@@ -1055,7 +1057,9 @@ if __name__ == "__main__":
                          help="Webserver framework to use (web.py, itty)" )
     parser.add_argument( '-a', '--address',
                          default="0.0.0.0:8080",
-                         help="Default interface[:port] to bind to (default: all, port 80)")
+                         help="Default interface[:port] to bind to (default: all, port 80)" )
+    parser.add_argument( '-l', '--log',
+                         help="Log file, if desired" )
     parser.add_argument( '-r', '--redundant', action="store_true",
                          help="If server is already bound to port, fail quietly" )
     parser.add_argument( 'repository', nargs=1 )
@@ -1143,6 +1147,8 @@ if __name__ == "__main__":
         """
 
         import web
+        import wsgilog
+
         urls			= (
             "/(.*)/",				"trailing_slash",
             "/",				"home",
@@ -1207,17 +1213,62 @@ if __name__ == "__main__":
                 web.header( "Content-Type", content )
                 return response
 
-        # Get the required classes from the local namespace.
-        # The iface:port must always passed on argv[1] to use
-        # app.run(), so use lower-level interface.
+        # web.py sets up logging, and then prints (hence logs) the address it is
+        # about to bind to before it actually binds.  Thus, if another server is
+        # already running on the port, the bind fails -- but output has already
+        # been logged to the same log file destination, disturbing the log file.
+        #
+        class Log( wsgilog.WsgiLog ):
+            def __init__( self, application ):
+                """Set up logging, and then make sure sys.stderr goes to
+                whereever sys.stdout is now going.  This ensures that
+                environ['wsgi.errors'] (which is always set to sys.stderr by
+                web.py) goes to the log file; this is used to log each incoming
+                HTTP request.  After setup, disable logging, 'til our first WSGI
+                call is made (the bind to server address has succeeded).
+
+                We want to be able to try to bind, and fail -- producing only
+                sys.stdout/stderr output.  When the first WSGI call is made,
+                then enable logging.  This may let a few log messages through,
+                because we don't handle /static/... URLs, so our wsgi middleware
+                doesn't get called 'til we handle something....
+                """
+                wsgilog.WsgiLog.__init__(
+                    self, application,
+                    logformat="%(message)s",
+                    log		= True,
+                    tohtml	= True,			# Exceptions generate HTML
+                    tofile	= True,			# Send logging to file
+                    file	= args.log,		# Target log file (may be None!)
+                    interval	= 'h',
+                    backups	= 1,
+                )
+                self.log	= False
+
+            def __call__( self, *args ):
+                print "Log.__call__..."
+                if not self.log:
+                    self.log	= True
+                    sys.stdout	= wsgilog.LogStdout( self.logger, logging.DEBUG )
+                    sys.stderr	= sys.stdout
+                return wsgilog.WsgiLog.__call__( self, *args )
+
         try:
+            # Get the required web.py classes from the local namespace.  The
+            # iface:port must always passed on argv[1] to use app.run(), so use
+            # lower-level web.httpserver.runsimple interface.  This sets up the
+            # WSGI middleware chain, prints the address and then invokes
+            # httpserver.WSGIserver.start(), which does the bind, and then makes
+            # WSGI calls (enabling our logging, above).
+            middleware		= []
+            if args.log:
+                middleware.append( Log )
             app			= web.application( urls, locals() )
-            web.httpserver.runsimple( app.wsgifunc(), address )
+            web.httpserver.runsimple( app.wsgifunc( *middleware ), address )
         except socket.error:
             if not args.redundant:
-                # Ignore errors binding on socket; drop through
+                # Ignore errors binding on socket; drop through and exit cleanly.
                 raise
-            print "Cannot bind to %s; org server probably already running" % args.address
 
     elif args.server == "itty":
         """The itty webserver is a very small Python native webserver

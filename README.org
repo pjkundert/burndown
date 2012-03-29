@@ -1,27 +1,89 @@
 * burndown -- Charting for agile projects
-  Uses [[https://github.com/mbostock/d3]] to generate burn-down charts.
 
-** bin/orgserver -- web.py based API server
-   Serves org-mode data from the specified org directory, for the
-   specified projects.  May be configured to update from git, and kill
-   a running servers if changes to the burndown implementation are
-   detected.
+  Uses [[https://github.com/mbostock/d3]] to generate burn-down charts from org-mode
+  project Effort estimates and CLOCKSUM time log data.
+
+  Prepare an org-mode file containing a project, in the form of a tree of TODO
+  entries.  Ensure that the top-level TODO entry for the project contains a date
+  entry, and put an org-mode table within it:
+
+  #+BEGIN_EXAMPLE
+      * TODO Project Test <2012-03-18 Sun>    
+      #+BEGIN: columnview :hlines 1 :id local
+      | Task                                 | Effort | CLOCKSUM |
+      |--------------------------------------+--------+----------|
+      | * TODO Project Test <2012-03-18 Sun> |  46:00 |          |
+      | ** TODO Setup                        |  10:00 |          |
+      #+END:
+      ** TODO Setup ...
+  #+END_EXAMPLE
+
+  Each day, update the CLOCKSUM (time worked) and/or Effort (TODO estimates)
+  data in the org file.  Update the top-level Project's date.  Finally, refresh
+  the table (hit C-c C-c in the BEGIN: line of the data summary table), save the
+  file and commit it to the Git repository.
+
+  The orgserver will parse the project data from the specified project's .org
+  files in the Git repository.  By scanning the historical contents in the Git
+  commit history, a burn-down chart will be rendered.  We use d3, so make sure
+  your browser supports SVG (eg. Chrome, Firefox or IE9+).
+
+** orgserver -- Start a web.py based web and JSON API server
+
+   Serves org-mode data from the specified org directory, for the specified
+   project(s).  May be configured to update from git, and kill a running servers
+   if changes to the burndown chart implementation itself are detected.
 
    The running orgserver puts its python orgserver.py's PID in the org
-   directory, in an orgserver.pid.##### file ending with the
-   orgserver's own PID.  This is used by subsequent orgservers, to
-   locate and terminate the running orgserver.py instances.
+   directory, in an orgserver.pid.##### file ending with the orgserver's own
+   PID.  This is used by subsequent orgservers, to locate and terminate the
+   other running orgserver.py instances.
 
    The following environment variables may be set:
 
-       ORG_PROJECTS	-- The list of project names
-       ORG_DIRECTORY	-- The org directory
+       ORG_PROJECTS     -- The list of project names (default: project)
+       ORG_DIRECTORY    -- The org directory (default: ~/org)
 
    The options are:
 
-       orgserver [--help] [--refresh] [--restart] [--org <dir>] [<project> ...]
-           --help      This help
-           --refresh   Refresh Git repositories
-           --restart   Restart any running server
-           --org <dir> org-mode data Git repository (default: ~/org)
-           <project>   <project>.org files to parse (default: project.org)
+   #+BEGIN_EXAMPLE
+       orgserver [--<option> [...]] [<project> [...]]
+           --help            This help
+           --verbose         Log activity
+           --restart         Restart any running server   (default: no)
+           --refresh         Refresh Git repositories     (default: no)
+           --address <i[:p]> Bind to interface:port       (default: *:8080)
+               Performs a "git pull origin master" on both the org data
+               directory, and the orgserver directory.  In either case,
+               if the master branch's commit changes, the orgserver will
+               forcibly restart any running orgserver.py.
+           --org <dir>       org-mode data Git repository (default: ~/org)
+           --log <file>      Log appending onto file      (default: -)
+               If not relative: (.[.]/*) to current directory, or
+               absolute: (/*), we assume it's relative to the org directory
+           --server <name>    Specify Web Server platform (default: web.py)
+           <project>         .org files to parse          (default: project)
+   #+END_EXAMPLE
+
+*** EXAMPLE
+
+    Run a orgserver bound to *:8080 on the host, serving org-mode data from
+    ~/org, for the project 'test' (ie. from org-data in ~/org/test.org):
+
+   #+BEGIN_EXAMPLE
+       ./orgserver --verbose --org=~/org test
+   #+END_EXAMPLE
+
+    Start (or restart) the orgserver's underlying webserver, refreshing the Org
+    data (~/org) and orgserver (~/src/burndown) Git repositories.  Exits quietly
+    if the orgserver is already running, and restarts it if the orgserver
+    repository 'master' branch has had new commits:
+
+       ~/src/burndown/orgserver --refresh --org=~/org some project names
+
+    This can be set up to occur automatically (say, hourly) using crontab -e:
+
+    #+BEGIN_EXAMPLE
+        # minute hour mday month wday command
+        # 0      *    *    *     *    $HOME/src/burndown/orgserver --refresh --log orgserver.log some project names
+    #+END_EXAMPLE

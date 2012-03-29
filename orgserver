@@ -13,94 +13,147 @@
 
 export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 
+QUI=1
 RUN="${0##*/}-$( printf "%05d" $$ ):"
 DIR=${0%/*}
 ORG=${ORG_DIRECTORY:-~/org}
 PRO=${ORG_PROJECTS:-}
 RES=0 # restart any running server
 REF=0 # refresh git repos
-PID=${ORG}/orgserver.pid # +.##### contains PID of this orgserver's orgserver.py
 LOG="-"
-OPT="--server=web.py --address 0.0.0.0:8080 --redundant"
+ADR=""
+SVR=""
 
 while (( $# > 0 )); do
-    if [[ "$1" == "--restart" ]]; then
+    if [[ "$1" == "--verbose" ]]; then
+        QUI=0
+    elif [[ "$1" == "--restart" ]]; then
         RES=1
     elif [[ "$1" == "--refresh" ]]; then
         REF=1
+    elif [[ "$1" == "--server" ]]; then
+        shift
+        SVR==${1}
     elif [[ "$1" == "--org" ]]; then
         shift
         ORG=${1}
     elif [[ "$1" == "--log" ]]; then
         shift
         LOG=${1}
+    elif [[ "$1" == "--address" ]]; then
+        shift
+        ADR=${1}
     elif [[ "$1" == "--help" ]]; then
-        echo "${RUN} [--help] [--refresh] [--restart] [--org <dir>] [<project> ...]"
-        echo "    --help       This help"
-        echo "    --restart    Restart any running server"
-        echo "    --refresh    Refresh Git repositories"
-        echo "    --org <dir>  org-mode data Git repository (default: ~/org)"
-        echo "    --log <file> Log appending onto file (default: -)"
-        echo "    <project>    <project>.org files to parse (default: project.org)"
+        echo "${0##*/} [--<option> [...]] [<project> [...]]"
+        echo "    --help            This help"
+        echo "    --verbose         Log activity"
+        echo "    --restart         Restart any running server   (default: no)"
+        echo "    --refresh         Refresh Git repositories     (default: no)"
+        echo "    --address <i[:p]> Bind to interface:port       (default: *:8080)"
+        echo "        Performs a \"git pull origin master\" on both the org data"
+        echo "        directory, and the orgserver directory.  In either case,"
+        echo "        if the master branch's commit changes, the orgserver will"
+        echo "        forcibly restart any running orgserver.py."
+        echo "    --org <dir>       org-mode data Git repository (default: ~/org)"
+        echo "    --log <file>      Log appending onto file      (default: -)"
+        echo "        If not relative: (.[.]/*) to current directory, or"
+        echo "        absolute: (/*), we assume it's relative to the org directory"
+        echo "    --server <name>    Specify Web Server platform (default: web.py)"
+        echo "    <project>         .org files to parse          (default: project)"
     else
-        # All remaining options are projects
+        # All other non-options are projects
         PRO="${PRO}${PRO:+ }${1}"
     fi
     shift
 done
 
-echo "${RUN} Directory: ${ORG}"
-echo "${RUN} Projects:  ${PRO}"
+# Our PID file is always in the target Org data directory.  We add a ".#####"
+# extension of this orgserver PID to the name; the file contains the PID of this
+# orgserver's orgserver.py server process.
+PID=${ORG}/orgserver.pid
 
-# Kill our orgserver.py and clean up our PID file on exit
+if [[ "${LOG}" != "-" && "${LOG#/}" == "${LOG}" ]]; then
+    # Log file path not default (stdout) and not absolute!
+    if [[ "${LOG#.}" == "${LOG}" ]]; then
+        # And not relative; must be a bare name.  Make relative to Org directory.
+        LOG="${ORG}/${LOG}"
+    else
+        # Explicitly relative; make relative to current directory.
+        LOG="$( pwd )/${LOG}"
+    fi
+fi
+
+(( ! QUI )) && echo "${RUN} Org Data:  ${ORG}"
+(( ! QUI )) && echo "${RUN} Projects:  ${PRO}"
+(( ! QUI )) && echo "${RUN} Log:       ${LOG}"
+
+# Kill our orgserver.py and clean up our PID file on exit.  This is executed on
+# any exit (eg. ^C, or due to exit after waiting for completion of orgserver, so
+# the orgserver.py process may not be alive).  Also, if killed by another, the
+# PID file may no longer exist (so cat may fail); dump all stderr output.
 trap cleanup EXIT
 cleanup () {
-    kill $( cat $PID.$$ )
+    kill $( cat $PID.$$ 2>&1 ) >/dev/null 2>&1
+    (( $? && ! QUI )) && echo "${RUN} No orgserver.py running"
     rm -f $PID.$$
 }
 
+# Refresh the Git repositories, if --refresh, and deduce if we should restart
+# the orgserver.py (due to a commit to its Git repo).
 if (( REF )); then
-    echo "${RUN} Refreshing $ORG..."
+    (( ! QUI )) && echo "${RUN} Refreshing $ORG..."
     ( cd $ORG && git pull origin master )
 fi
-
-(
-    cd $DIR
-    master=$( git show --oneline )
-    if (( REF )); then
-        echo "${RUN} Refreshing $DIR..."
-        git pull origin master
-        if [[ "$( git show --oneline )" != "$master" ]]; then
-            echo "Detected $DIR update"
-            RES=1
-        fi
+master=$( cd $DIR && git show --oneline )
+if (( REF )); then
+    (( ! QUI )) && echo "${RUN} Refreshing $DIR..."
+    ( cd $DIR && git pull origin master )
+    if [[ "$( cd $DIR && git show --oneline )" != "$master" ]]; then
+        (( ! QUI )) && echo "Detected $DIR update"
+        RES=1
     fi
-    if (( RES )); then
-        echo "${RUN} Restarting orgserver.py"
-        for pid in $PID.*; do
-            if [ -f $pid ]; then
-                kill $( cat $pid )
-                rm $pid
-            fi
-        done
-        sleep 1
-    fi
-)
-
-# Run the python orgserver.py, savings its PID, and waiting 'til it exits.
-# Since web.py access all /static content relative to its CWD, ensure that we
-# change directory to the proper target before executing.
-CMD="./orgserver.py ${OPT} ${ORG} ${PRO}"
-echo "${RUN} In $DIR, starting: $CMD"
-if [[ "$LOG" == "-" ]]; then
-    cd $DIR && $CMD &
-else
-    cd $DIR && $CMD >> $LOG &
 fi
-echo $! >> $PID.$$
+if (( RES )); then
+    (( ! QUI )) && echo "${RUN} Restarting orgserver.py"
+    SLP=0
+    for pid in $PID.*; do
+        if [ -f $pid ]; then
+            kill $( cat $pid ) >/dev/null 2>&1
+            rm -f $pid
+            SLP=1
+        fi
+    done
+    (( SLP )) && sleep $SLP
+fi
+
+# Construct orgserver.py options list and command to run.  If not explicitly or
+# automatically wanting a restart; then if server already running, have
+# orgserver.py fail silently without error, if we cannot bind to the socket.
+OPT=""
+(( ! RES ))           && OPT="${OPT}${OPT+ }--redundant"
+[[ "${ADR}" != ""  ]] && OPT="${OPT}${OPT+ }--address ${ADR}"
+[[ "${SVR}" != ""  ]] && OPT="${OPT}${OPT+ }--server ${SVR}"
+[[ "${LOG}" != "-" ]] && OPT="${OPT}${OPT+ }--log ${LOG}"
+CMD="./orgserver.py ${OPT} ${ORG} ${PRO}"
+
+# Run orgserver.py, savings its PID, and waiting 'til it exits.  Since web.py
+# access all /static content relative to its CWD, ensure that we change
+# directory to the proper target before executing.  Any $LOG file has been
+# safely converted to an absolute address.
+(( ! QUI )) && echo "${RUN} In: $DIR, Running: $CMD"
+cd $DIR
+if (( QUI )); then
+    $CMD </dev/null >/dev/null 2>&1 &
+    pid=$!
+else
+    $CMD &
+    pid=$!
+fi
+echo $pid >> $PID.$$
+
+# Harvest result of orgserver.py execution, and exit with that status
 wait $!
 if (( $? )); then
-    echo "${RUN} Failed: $?"
-else
-    echo "${RUN} Exiting."
+    (( ! QUI )) && echo "${RUN} Failed: $?"
 fi
+exit $?
