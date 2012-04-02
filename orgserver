@@ -102,7 +102,7 @@ cleanup () {
 # the orgserver.py (due to a commit to its Git repo).
 if (( REF )); then
     (( ! QUI )) && echo "${RUN} Refreshing $ORG..."
-    ( cd $ORG && git -q pull origin master )
+    ( cd $ORG && git pull -q origin master )
 fi
 master=$( cd $DIR && git show --oneline )
 if (( REF )); then

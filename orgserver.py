@@ -510,9 +510,9 @@ def project_data_parse( data, project ):
         for d in dicts:
             texts[d]		= dict( reversed( stats[d] ))
 
-        # The "est" Estimate (the unfortunately named Effort column)
+        # The "estimated" (the unfortunately named Effort) column
         # deals in the total number of story points (estimated in
-        # hours, roughly) for all tasks.  Map some known columsn to
+        # hours, roughly) for all tasks.  Map some known columns to
         # more correct names.
         mapping			= {
             "Effort":   "estimated",
@@ -563,7 +563,12 @@ def best_fit( points ):
 def project_stats_transform( results, style, bestfit=True ):
     """Transform the project stats in-place, into the specified x-axis style.
     The incoming data is assumed to be raw project data, in standard elapsed
-    (calendar) time.  Adds a "label" field to each entry.
+    (calendar) time.  Adds a "label" field to each entry.  For the given style,
+    we create equally spaced records for units of:
+
+    elapsed	-- linear elapsed (calendar) time
+    effort	-- units of clocked work on all tasks (even canceled ones)
+    sprint	-- for each "Sprint #", as defined in the project name's
     """
     results["style"]		= style
 
@@ -575,11 +580,12 @@ def project_stats_transform( results, style, bestfit=True ):
     filled			= []
     rec, old			= None, None
     if style == "elapsed":
-        # Fill in missing elapsed time entries in 'filled'.
+        # Fill in missing days in elapsed time entries in 'filled'.
         for rec in results["list"]:
             # Take the date of 'old' (the last record in the filled list), and
             # keep copying it and advancing its date 'til we reach the date in
-            # the current rec.
+            # the current rec, filling in with copies of the last record's data
+            # (keeping xxxxTotal data, but zeroing out the xxxxx change data)
             recymd		= date_components( rec["date"] )
             print "Process %s" %( repr( recymd ))
             while filled: # (Skip for very first record, otherwise loop forever)
@@ -611,18 +617,68 @@ def project_stats_transform( results, style, bestfit=True ):
             print "Copying %s" % ( repr( recymd ))
             rec["label"]	= "Day %d" % ( len( filled ) + 1 )
             filled.append( rec )
+    elif style == "effort":
+        # Output the first record, and then scan the records, outputting a copy
+        # of the latest record for each # hours of CLOCKSUM work reported.  Drop
+        # the last modulo-# remainder.  By default, # == 8 hours.  When skipping
+        # records due to insuffient total CLOCKSUM, sum up the 'xxxx' data from
+        # intervening records, and use the last record's 'xxxxTotal' data.  Then
+        # emitting the same record multiple times, zero out the 'xxxx' data for
+        # the additional copies, and use the original 'xxxxTotal' data.
+        step			= 0
+        add			= {}	# data to save from discarded records
+        for rec in results["list"]:
+            # The 'rec["total"]["CLOCKSUM"]' value defines how much work has
+            # been clocked, so far.  This includes all tasks, whether still in
+            # 'project' or having been removed.  We uses this value (instead of
+            # 'project', which doesn't include removed tasks), because we want
+            # to measure progress vs. the actual amount of effort expended --
+            # including tasks we later decide to remove from the project's
+            # scope.
+            recymd		= date_components( rec["date"] )
+            print "Process %s" %( repr( recymd ))
+            nxt			= copy.deepcopy( rec )
+            if ( not filled		# first record!
+                 or nxt["total"]["CLOCKSUM"] >= step ):
+                # We met/exceeded this step with this record.  Include
+                # any data from previously dropped records, and update
+                # the corresponding "xxxx" (textual "00:00" version) for
+                # each "xxxx#"
+                for d in "estimated", "work":
+                    nxt[d]     += add[d]
+                    assert d.endswith("#")
+                    for k, v in  add.items():
+                        nxt[d]         += ( k, v )
+                        nxt[d[:-1]]     = dict( reversed( nxt[d] ))
+
+                print "Filling %s" % ( repr( nxtymd ))
+
+            # OK, time to add record (contains any change data from discarded records.
+            nxt["label"]	= "Day %d" % ( len( filled ) + 1 )
+            print "Adding %s" % ( nxt["label"] )
+            filled.append( nxt )
+
     else:
         raise Exception( "Unkown style: %s" % ( style ))
 
     results["list"]		= filled
 
-    # Compute the burndown lines for each record.  The first record doesn't have
-    # one (as there is no slope), nor does any empty record (one with no "list"
-    # entry).  Presently, we'll just use a linear average between the first and
-    # current record, over (todoTotal - addedTotal) for our "progress" line, and
-    # over (deltaTotal) for our "change" line.  Compute the project finish-x
-    # 'fx' (None if not computable)
-
+    # Compute the burndown lines for each record.  These estimate the rate of
+    # change in Effort (the estimatd time), vs. the selected X axis (which are
+    # assumed to be at consistently equidistant from each-other by some
+    # interpretation; "elapsed", "effort", etc.).
+    #
+    # The first record doesn't have one (as there is no slope), nor does any
+    # empty record (one with no "list" entry).  If too much change is detected
+    # (eg. too many tasks added/removed or estimates changed), then the project
+    # is considered to have suffered a discontinuity, and fresh estimates will
+    # be generated from that point forward.
+    #
+    # If 'bestfit' is not selected, we'll just use a linear average between the
+    # first and current record, over (todoTotal - addedTotal) for our "progress"
+    # line, and over (deltaTotal) for our "change" line.  For 'bestfit', we'll
+    # compute the best fit line for the same data.  Computes the project
+    # finish-x 'fx' (None if not computable)
     change_max			= 10 # Percent change indicating discontinuity
     fxmax			= None
     fxmultiple			= 5 # Allow expanding the results by this factor
@@ -1246,7 +1302,6 @@ if __name__ == "__main__":
                 self.log	= False
 
             def __call__( self, *args ):
-                print "Log.__call__..."
                 if not self.log:
                     self.log	= True
                     sys.stdout	= wsgilog.LogStdout( self.logger, logging.DEBUG )
