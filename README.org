@@ -31,7 +31,7 @@
 ** orgserver -- Start a web.py based web and JSON API server
 
    Serves org-mode data from the specified org directory, for the specified
-   project(s).  May be configured to update from git, and kill a running servers
+   project(s).  May be configured to update from git, and kill running server(s)
    if changes to the burndown chart implementation itself are detected.
 
    The running orgserver puts its python orgserver.py's PID in the org
@@ -133,3 +133,8 @@
      cd wsgilog # yes, again...
      python setup.py install --prefix=/usr/local
      #+END_EXAMPLE
+
+*** SCREENSHOT
+
+    The burndown project itself, in "effort" style:
+    [[file:[[./static/resources/screenshot-burndown.png]]]]

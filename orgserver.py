@@ -712,8 +712,9 @@ def project_stats_transform( results, style, bestfit=True ):
                     # records.)  Zero out the xxxx change data, but retain the
                     # xxxxTotal data, in case we need to emit copies of this
                     # record.
-                    print "  Emitting %s: %s" % (
-                        nxt["label"], json.dumps( nxt, sort_keys=True, indent=4 ))
+                    print "  Emitting %s" % ( nxt["label"] )
+                    #print "  Emitting %s: %s" % (
+                    #    nxt["label"], json.dumps( nxt, sort_keys=True, indent=4 ))
                     filled.append( nxt )
                     nxt		= copy.deepcopy( nxt )
                     for d in masterkeys:

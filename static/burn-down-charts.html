@@ -33,8 +33,12 @@
         background-color: #FFF;
     }
     .project-title {
-        color:          #000;
+        color:          #777;
         font-size:	16pt;
+    }
+    .project-date {
+        color:          #000;
+        font-size:	14pt;
     }
     </style>
 </head>
@@ -164,9 +168,9 @@
         function drawGraph(data) {
             $('.graph-container').html(
                   '<span class="project-title">'+data.project+'('+data.style+')'
-                +   ' Began: <span id="project-start"></span>'
-                +   ' Now:   <span id="project-now"></span>'
-                +   ' End:   <span id="project-finish"></span>'
+                +   ' Began: <span class="project-date" id="project-start"></span>'
+                +   ' Now:   <span class="project-date" id="project-now"></span>'
+                +   ' End:   <span class="project-date" id="project-finish"></span>'
                 + '</span>')
 
             //   json object structure:
@@ -228,8 +232,8 @@
             // define x and y scales
             var x = d3.scale.ordinal()
                 .domain(xMax)
-                // space between bars will be 65% of bar width
-                .rangeBands([0, gWidth], 0.65)
+                // space between bars will be 50% of bar width
+                .rangeBands([0, gWidth], 0.50)
             var y = d3.scale.linear()
                 .domain([yMin, yMax])
                 .range([gHeight, 0])
@@ -462,8 +466,12 @@
                 .attr('text-anchor', 'middle')
                 .attr('style', 'font-size: 10pt; fill: #BBB;')
                 .text(function (d, i) {
-                    // json api will return title for rules
-                    return xMax[i]
+                    // json api will return title for rules.  Limit to max 20
+                    // labels, by printing only every (<length>/20)'th label.
+                    ith = parseInt(xMax.length / 20) + 1
+                    if ( i % ith == 0 )
+                        return xMax[i]
+                    return ""
                 })
 
             // create and assign data to plot lines

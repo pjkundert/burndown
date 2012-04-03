@@ -8,3 +8,6 @@
 animate.js
 *.log.*
 *.log
+*.pdf
+*.tex
+auto/
