@@ -520,10 +520,10 @@ def project_data_parse( data, project ):
         }
         for i in stats[dicts[0]].keys():
             n                   = mapping.get( i, i )
-            rec[n]			= {}
+            rec[n]		= {}
             for d in dicts:
-                rec[n][d]		= texts[d][i]
-                rec[n][d+"#"]		= stats[d][i]
+                rec[n][d]	= texts[d][i]
+                rec[n][d+"#"]	= stats[d][i]
 
         results["list"].append( rec )
         print "Adding record %3d for %r" % ( len( results["list"] ),  rec["date"] )
@@ -561,15 +561,39 @@ def best_fit( points ):
 
 
 def project_stats_transform( results, style, bestfit=True ):
-    """Transform the project stats in-place, into the specified x-axis style.
-    The incoming data is assumed to be raw project data, in standard elapsed
-    (calendar) time.  Adds a "label" field to each entry.  For the given style,
-    we create equally spaced records for units of:
+    """Transform and return the project stats into the specified x-axis style.
+    The incoming data is not interfered with (may be from a cache), and is
+    assumed to be summary project data, in standard elapsed (calendar) time,
+    possibly with gaps.  Adds a "label" field to each entry.  For the given
+    style, we create equally spaced records for units of:
 
-    elapsed	-- linear elapsed (calendar) time
-    effort	-- units of clocked work on all tasks (even canceled ones)
-    sprint	-- for each "Sprint #", as defined in the project name's
+        elapsed	-- linear elapsed (calendar) time
+        effort	-- units of clocked work on all tasks (even canceled ones)
+        sprint	-- for each "Sprint #", as defined in the project name's
+
+    These deal in processed records of the form:
+        results["list"] = [{
+            "work": {
+                "added": 0,
+                "delta": 32,
+                ...
+            },
+            "estimated": {
+                "added": 0,
+                ...
+            }
+        }
+
+    Lines are projected for "progress" -- amount left To Do minus the increase
+    in the project scope (todoTotal - deltaTotal), "change" -- the increase in
+    the project scope (deltaTotal).  Where these lines intersect is the
+    projected completion of the project.
+
+    The date[#] data is also projected, to synthesize date for any entries added
+    at the end of the project.
+
     """
+    results			= copy.copy( results )	# Shallow copy
     results["style"]		= style
 
     def date_components( date ):
@@ -586,6 +610,7 @@ def project_stats_transform( results, style, bestfit=True ):
             # keep copying it and advancing its date 'til we reach the date in
             # the current rec, filling in with copies of the last record's data
             # (keeping xxxxTotal data, but zeroing out the xxxxx change data)
+            rec			= copy.deepcopy( rec )
             recymd		= date_components( rec["date"] )
             print "Process %s" %( repr( recymd ))
             while filled: # (Skip for very first record, otherwise loop forever)
@@ -613,9 +638,13 @@ def project_stats_transform( results, style, bestfit=True ):
 
                 print "Filling %s" % ( repr( nxtymd ))
                 nxt["label"]	= "Day %d" % ( len( filled ) + 1 )
+                print "  Emitting %s: %s" % (
+                    nxt["label"], json.dumps( nxt, sort_keys=True, indent=4 ))
                 filled.append( nxt )
             print "Copying %s" % ( repr( recymd ))
             rec["label"]	= "Day %d" % ( len( filled ) + 1 )
+            print "  Emitting %s: %s" % (
+                rec["label"], json.dumps( rec, sort_keys=True, indent=4 ))
             filled.append( rec )
     elif style == "effort":
         # Output the first record, and then scan the records, outputting a copy
@@ -625,8 +654,12 @@ def project_stats_transform( results, style, bestfit=True ):
         # intervening records, and use the last record's 'xxxxTotal' data.  Then
         # emitting the same record multiple times, zero out the 'xxxx' data for
         # the additional copies, and use the original 'xxxxTotal' data.
+        increment		= 8*60*60
         step			= 0
         add			= {}	# data to save from discarded records
+        changekeys		= [ "added", "delta", "done", "removed", "todo" ]
+        masterkeys		= [ "work", "estimated" ]
+        add			= None
         for rec in results["list"]:
             # The 'rec["total"]["CLOCKSUM"]' value defines how much work has
             # been clocked, so far.  This includes all tasks, whether still in
@@ -636,27 +669,68 @@ def project_stats_transform( results, style, bestfit=True ):
             # including tasks we later decide to remove from the project's
             # scope.
             recymd		= date_components( rec["date"] )
-            print "Process %s" %( repr( recymd ))
+            print "Process %s: %5d hours effort" %( repr( recymd ),
+                                                    rec["work"]["total#"]/60/60 )
+            if add is None:
+                add		= dict( ( d, timedict(int) ) for d in masterkeys )
             nxt			= copy.deepcopy( rec )
-            if ( not filled		# first record!
-                 or nxt["total"]["CLOCKSUM"] >= step ):
-                # We met/exceeded this step with this record.  Include
-                # any data from previously dropped records, and update
-                # the corresponding "xxxx" (textual "00:00" version) for
-                # each "xxxx#"
-                for d in "estimated", "work":
-                    nxt[d]     += add[d]
-                    assert d.endswith("#")
-                    for k, v in  add.items():
-                        nxt[d]         += ( k, v )
-                        nxt[d[:-1]]     = dict( reversed( nxt[d] ))
+            if step <= nxt["work"]["total#"]:
+                # We met/exceeded this step with this record.  Include any data
+                # from previously dropped records, and update the corresponding
+                # "xxxx" (textual "00:00" version) for each "xxxx#".  Keep
+                # emiting copies 'til our step advances beyond this record's
+                # total amount of work effort.  We'll use the 'add' timedict's'
+                # += ( field, value ) operator to add sum to nxt.  Also, since
+                # we'll be changing and re-emitting nxt, make sure we do a deep
+                # copy each time, so changes don't affect the reference already
+                # appended to filled...
+                while step <= nxt["work"]["total#"]:
+                    nxt["label"]= "Day %d" % ( len( filled ) + 1 )
+                    for d in masterkeys:
+                        if not add or not add[d]:
+                            continue
+                        for fn in add[d].keys():
+                            assert fn.endswith("#")
+                            print "    Adding: %-10s %-10s of %s" % (
+                                d, fn, repr( dict( reversed( add[d] ))))
+                            add[d]     += ( fn, nxt[d][fn] )
+                        for fn, v in reversed( add[d] ):
+                            f		= fn[:-1]
+                            print "    Update: %-10s %-10s of %7d (%5s) to %7d (%5s)" % (
+                                d, f, nxt[d][fn], nxt[d][f], add[d][fn], v )
+                            nxt[d][fn]	= add[d][fn]
+                            nxt[d][f]	= v
 
-                print "Filling %s" % ( repr( nxtymd ))
+                    add		= None
+                    step       += increment
 
-            # OK, time to add record (contains any change data from discarded records.
-            nxt["label"]	= "Day %d" % ( len( filled ) + 1 )
-            print "Adding %s" % ( nxt["label"] )
-            filled.append( nxt )
+                    # OK, time to add record to filled; 'nxt' record (contains
+                    # any change data collected in 'add' from from discarded
+                    # records.)  Zero out the xxxx change data, but retain the
+                    # xxxxTotal data, in case we need to emit copies of this
+                    # record.
+                    print "  Emitting %s: %s" % (
+                        nxt["label"], json.dumps( nxt, sort_keys=True, indent=4 ))
+                    filled.append( nxt )
+                    nxt		= copy.deepcopy( nxt )
+                    for d in masterkeys:
+                      for f in changekeys:
+                        fn		= f+"#"
+                        nxt[d][f]       = "0:00"
+                        nxt[d][fn]	= 0
+            else:
+                # This record doesn't include enough logged work to meet the
+                # next step.  Discard it, but retain any non-zero differentials
+                # to 'add' to the next record output.  Then, advance to next
+                # record.  We'll simply discard this data if we never reach the
+                # next 'interval' hours.
+                for d in masterkeys:
+                  for f in changekeys:
+                    fn		= f+"#"
+                    if rec[d][fn] != 0:
+                        add[d] += ( fn, rec[d][fn] )
+                        print "    Saving: %-10s %-10s of %7ds; now %s" % (
+                            d, f, rec[d][fn], repr( dict( reversed( add[d] ))))
 
     else:
         raise Exception( "Unkown style: %s" % ( style ))
@@ -681,47 +755,62 @@ def project_stats_transform( results, style, bestfit=True ):
     # finish-x 'fx' (None if not computable)
     change_max			= 10 # Percent change indicating discontinuity
     fxmax			= None
-    fxmultiple			= 5 # Allow expanding the results by this factor
+    fxmultiple			= 3 # Allow expanding the results by this factor
     rec, zro			= None, None
 
     prgrdata			= []
     chngdata			= []
+    datedata			= []
 
     num				= len( results["list"] )
-
     for i in xrange( num ):
         rec			= results["list"][i]
         rec["lines"]		= None
 
+        print "Record %d, %-10s" % ( i, rec["label"] )
+
         # If the delta (change) in the project is greater than a certain
         # percentage of the project size, then we'll  assume a "discontinous"
         # change to the project, and compute fresh slopes.
-        if ( abs( rec["estimated"]["delta#"] )
-             > rec["estimated"]["project#"] * change_max / 100 ):
-            print "Record %d: Discontinuity; %d%% change" % (
-                i,  ( abs( rec["estimated"]["delta#"] ) * 100
-                      / rec["estimated"]["project#"] ))
+        estdlta			= rec["estimated"]["delta#"]
+        estproj			= rec["estimated"]["project#"]
+        print "  Change:   %4d%%: project is %7d, change is %7d" % (
+            estdlta * 100 / estproj, estproj, estdlta )
+        if ( abs( estdlta ) > estproj * change_max / 100 ):
+            print "    Discontinuity; %3d%% change" % ( abs( estdlta ) * 100 / estproj )
             prgrdata		= []
             chngdata		= []
+            datedata		= []
 
-        prgrdata.append( (i, (  rec["estimated"]["todoTotal#"]
-                              - rec["estimated"]["deltaTotal#"] )) )
-        chngdata.append( (i, -rec["estimated"]["deltaTotal#"] ) )
+        esttodoT		= rec["estimated"]["todoTotal#"]
+        estdltaT		= rec["estimated"]["deltaTotal#"]
+        print "  Progress: %7d (%7d todo - %7d Change)" % (
+            esttodoT - estdltaT, esttodoT, estdltaT )
+        prgrdata.append( (i,  esttodoT - estdltaT) )
+        chngdata.append( (i, -estdltaT) )
+        datedata.append( (i,  rec["date#"]) )
 
         if len( chngdata ) <= 1:
+            # 0 or 1 data point; no line can be computed
             continue
 
-        # We have at least 2 points!  Compute progress/change slopes.
+        # We have at least 2 points!  Compute progress/change/date slopes.
         lines = rec["lines"]	= {}
         if bestfit:
             px0, py0, pslope	= best_fit( prgrdata )
             px0, py0		= int( px0 ), int( py0 )
             pC			= py0 - pslope * px0
             px1, py1		= i, int( pslope * i + pC )
+
             cx0, cy0, cslope	= best_fit( chngdata )
             cx0, cy0		= int( cx0 ), int( cy0 )
             cC			= cy0 - cslope * cx0
             cx1, cy1		= i, int( cslope * i + cC )
+
+            dx0, dy0, dslope	= best_fit( datedata )
+            dx0, dy0		= int( dx0 ), int( dy0 )
+            dC			= dy0 - dslope * dx0
+            dx1, dy1		= i, int( dslope * i + dC )
         else:
             px0, py0            = prgrdata[0]
             px1, py1            = prgrdata[i]
@@ -733,8 +822,14 @@ def project_stats_transform( results, style, bestfit=True ):
             cslope		= float(cy0 - cy1) / (cx0 - cx1)
             cC			= cy0 - cslope * cx0
 
-        lines["progress"]	= {"x1": px0, "y1": py0, "x2": px1, "y2": py1} # [(px0, py0), (px1, py1)]
-        lines["change"]		= {"x1": cx0, "y1": cy0, "x2": cx1, "y2": cy1} # [(cx0, cy0), (cx1, cy1)]
+            dx0, dy0		= datedata[0]
+            dx1, dy1		= datedata[i]
+            dslope		= float(dy0 - dy1) / (dx0 - dx1)
+            dC			= dy0 - dslope * dx0
+
+        lines["progress"]	= {"x1": px0, "y1": py0, "x2": px1, "y2": py1}
+        lines["change"]		= {"x1": cx0, "y1": cy0, "x2": cx1, "y2": cy1}
+        lines["date"]		= {"x1": dx0, "y1": dy0, "x2": dx1, "y2": dy1}
 
         #
         # A line equation is:
@@ -770,7 +865,19 @@ def project_stats_transform( results, style, bestfit=True ):
         #
         if cslope - pslope > 0:
             fx			= ( pC - cC ) / ( cslope - pslope )
-            print "Slopes will intercept in future at x=%f" % ( fx )
+            print "Slopes will intercept in future at x == %f" % ( fx )
+
+            # We can now project the finish date as of this sample
+            ftimestamp		= dslope * fx + dC
+            fdate		= None
+            try:
+                d		= datetime.date.fromtimestamp( ftimestamp )
+                fdate		= "%4d-%02d-%02d" % ( d.year, d.month, d.day )
+                print "  Finish date at projected intercept: %s" % ( fdate )
+            except:
+                print "  Finish date incomputable"
+                pass
+            rec["finish"]	= fdate
 
             # Compute the number of columns required to contain the point
             # where the progress and change lines meet.  However, clamp at a
@@ -781,8 +888,12 @@ def project_stats_transform( results, style, bestfit=True ):
             fxnext              = min( int( math.ceil( fx )), fxmultiple * num)
             fxmax		= max( fxnext, fxmax or 0 )
 
-            lines["progress"]={"x1":px0, "y1":py0, "x2":fxnext, "y2":int( pslope * fxnext + pC )}
-            lines["change"]  ={"x1":cx0, "y1":cy0, "x2":fxnext, "y2":int( cslope * fxnext + cC )}
+            lines["progress"]	= {"x1":px0,    "y1":py0,
+                                   "x2":fxnext, "y2":int( pslope * fxnext + pC )}
+            lines["change"]     = {"x1":cx0,    "y1":cy0,
+                                   "x2":fxnext, "y2":int( cslope * fxnext + cC )}
+            lines["date"]       = {"x1":dx0,    "y1":dy0,
+                                   "x2":fxnext, "y2":int( dslope * fxnext + dC )}
         else:
             print "Slopes will intercept in past"
 
@@ -791,17 +902,23 @@ def project_stats_transform( results, style, bestfit=True ):
         print "Record %d: change:   %-32s, %f slope" % (
             i, repr( lines["change"] ),   cslope )
 
+        print "Record %d: date:     %-32s, %f slope" % (
+            i, repr( lines["date"] ),     dslope )
+
     # We've computed a finish-x.  Fill in the results["list"] with empty
-    # records.
+    # records.  Since we've computed an intersection, compute the approximate
+    # projected date for each (may be impossible; if so, None)
     if fxmax is not None:
         print "Need %d total records; adding %d" % (
             fxmax + 1, fxmax - len( results["list"] ) + 1 )
     while fxmax and fxmax >= len( results["list"] ):
         rec			= copy.deepcopy( results["list"][-1] )
-        recymd			= date_components( rec["date"] )
-        nxtdtm			= datetime.datetime( *recymd ) + datetime.timedelta( 1 )
-        rec["date#"]		= time.mktime( nxtdtm.timetuple() )
-        rec["date"]		= nxtdtm.strftime( "%Y-%m-%d" )
+        rec["date#"]		= dslope * len( results["list"] ) + dC
+        try:
+            d			= datetime.date.fromtimestamp( rec["date#"] )
+            rec["date"]		= "%4d-%02d-%02d" % ( d.year, d.month, d.day )
+        except:
+            rec["date"]		= None
         rec["label"]		= "Day %d" % ( len( results["list"] ) + 1 )
         rec["blob"]		= None
         rec["lines"]            = None
@@ -810,6 +927,8 @@ def project_stats_transform( results, style, bestfit=True ):
 
         print "Extend  %s" % ( rec["date"] )
         results["list"].append( rec )
+
+    return results
 
 
 def deduce_encoding( available, environ, accept=None ):
@@ -922,17 +1041,18 @@ def projects_request( repository, project,
         accept		-- A forced MIME encoding (eg. application/json).
         framework	-- The web framework module being used
     """
-    accept		= deduce_encoding( [ "application/json", "text/html" ],
+    accept		= deduce_encoding( [ "application/json",
+                                             "text/javascript",
+                                             "text/plain",
+                                             "text/html" ],
                                            environ=environ, accept=accept )
 
     hexsha, data	= project_data( repository, project )
     # TODO: Deduce available graph styles from data (eg. see if sprint specified)
-    styles		= [ "sprint", "elapsed", "effort" ]
+    styles		= [ "effort", "elapsed", "sprint" ]
 
     # GET Qeury options
-    #     callback: function	-- wrap JSON in a function call
-    print "project_request: queries == %r" % ( queries )
-
+    #     callback: function	-- wrap JSON in a function call (jsonp)
     content		= [
         {
             "project":	name,
@@ -941,7 +1061,7 @@ def projects_request( repository, project,
         for name in data.keys()
     ]
 
-    if accept == "application/json":
+    if accept and accept in ("application/json", "text/javascript", "text/plain"):
         # JSON
         response		= ""
         callback		= queries and queries.get( 'callback', "" ) or ""
@@ -950,7 +1070,7 @@ def projects_request( repository, project,
         response               += json.dumps( content, sort_keys=True, indent=4 )
         if callback:
             response           += " )"
-    elif accept == "text/html":
+    elif accept in ("text/html"):
         # HTML5.  Yes, this minimal markup is cross-browser standards
         # compliant (including the unquoted attributes!)
         html			= """\
@@ -1015,7 +1135,10 @@ def data_request( repository, project, path,
     hash of the commit.  The optional linear query option will changed
     from best-fit to linear estimation.
     """
-    accept		= deduce_encoding( [ "application/json", "text/html" ],
+    accept		= deduce_encoding( [ "application/json",
+                                             "text/javascript",
+                                             "text/plain",
+                                             "text/html" ],
                                            environ=environ, accept=accept )
 
     # Confirm that project name and (optional) style are valid.
@@ -1058,23 +1181,24 @@ def data_request( repository, project, path,
         data_request.cache[proj]= stats
 
 
-    # Transform the raw stats into the desired x-axis style.
-    print repr( queries )
-    project_stats_transform( stats, style,
-                             bestfit=(( "linear" not in queries ) if queries else True ))
+    # Transform the raw stats into the desired x-axis style.  We must perform a
+    # shallow copy of the stats dict, because we modify it "in-place".  We
+    # promise to do a deep copy of any dicts within this that we have to change.
+    trans			= project_stats_transform(
+        stats, style, bestfit=(( "linear" not in queries ) if queries else True ))
 
     response			= None
-    if accept == "application/json":
+    if accept and accept in ("application/json", "text/javascript", "text/plain"):
         response		= ""
         callback		= queries and queries.get( 'callback', "" ) or ""
         if callback:
             response		= callback + "( "
-        response               += json.dumps( stats, sort_keys=True, indent=4 )
+        response               += json.dumps( trans, sort_keys=True, indent=4 )
         if callback:
             response           += " )"
 
-    elif accept == "text/html":
-        pass
+    #elif accept and accept in ("text/html"):
+    #    pass
 
     else:
         # Invalid encoding requested.  Return appropriate 406 Not Acceptable
@@ -1208,9 +1332,8 @@ if __name__ == "__main__":
         urls			= (
             "/(.*)/",				"trailing_slash",
             "/",				"home",
-            "/api/projects.json",		"projects",
-            "/api/projects",			"projects",
-            "/api/data/(.*)",			"data",		# Passes remainder as argument
+            "/api/projects(.json)?",		"projects",
+            "/api/data/(.*)",			"data",
         )
 
         class trailing_slash:
@@ -1231,14 +1354,14 @@ if __name__ == "__main__":
                 web.seeother( target )
 
         class projects:
-            def GET( self ):
+            def GET( self, path ):
                 """Deduce accept encoding from Accept: header, or
                 force JSON if .json path was explicitly requested.
                 """
                 environ		= web.ctx.environ
                 queries		= web.input()
                 accept		= None
-                if environ.get( "PATH_INFO", "" ).endswith( ".json" ):
+                if path and path.endswith( ".json" ):
                     accept	= "application/json"
 
                 # Always returns a content-type and response.  If an

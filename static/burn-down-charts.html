@@ -76,7 +76,9 @@
             type="text/javascript" rel="javascript"></script>
     <script type="text/javascript">
         var data;
-        var fn;
+        var project;	// Currently selected Project
+        var style;	// currently select Style
+
         $('#alert').modal({
             backdrop:   true,
             show:       false,
@@ -99,22 +101,20 @@
             return $('#alert').modal('show')
         }
 
-        function loadProject(data) {
-            var p
-            , t = $.type(data)
-
-            if(t=='object') {
-                p = data.project
-            } else if(t=='string') {
-                p = data
+        function loadProject( prj, sty ) {
+            // Get project json object from api and send it to drawGraph.  Sends
+            // a Accept: text/javascript header.  If either/both are define and
+            // non-empty, make them the "default"
+            if ($.type(prj) != 'undefined' && !!prj) {
+                project = prj
             }
-
-            // Get project json object from api and send it to drawGraph
+            if ($.type(sty) != 'undefined' && !!sty) {
+                style = sty
+            }
             $.ajax({
-                url: '/api/data/' + p + '/elapsed.json',
+                url: '/api/data/' + project + '/' + style,
                 dataType: 'jsonp',
                 success: function(d) {
-                    data             = d
                     new drawGraph(d)
                 },
                 error: function(jxr, s, m) {
@@ -127,18 +127,29 @@
         function fillMenu(data) {
             // Received Project list.  Populate dropdown-menu, and dispatch
             // initial default project data load.  Each project has an <a
-            // href... /> with an id of "project-link"
+            // href... /> supplying attributes either project="<project>" or
+            // styles="<style>", which override the default.  Presently assumes
+            // that every project has the same styles available...  Doesn't
+            // support a data with no (empty) projects list.
             var items	= "";
             for (proj in data) {
-                var a       = data[proj].project
-                items      += '<li><a href="#" project="'+a+'">'+a+'</a></li>'
+                var p = data[proj].project
+                items += '<li><a href="#" project="' + p + '">'+p+'</a></li>'
+            }
+            items += '<li class="divider" />'
+            for (i = 0; i < data[proj].styles.length; ++i) {
+                var s = data[proj].styles[i]
+                items += '<li><a href="#" style="' + s + '">'+s+'</a></li>'
             }
             $('.dropdown-menu').html(items);
 
             $(document).on("click",'.dropdown-menu li a', function () {
-                loadProject($(this).attr('project'))
+                // Only one or the other will be set; the other, undefined
+                loadProject($(this).attr('project'), $(this).attr('style'))
             })
-            loadProject(data[0])
+
+            // Initially, load the last project, with its first style
+            loadProject(data[proj].project, data[proj].styles[0])
         }
 
         // capitalizes to first letter in string
@@ -147,7 +158,8 @@
         }
 
         function drawGraph(data) {
-            $('.graph-container').html('')
+            $('.graph-container').html(
+                '<strong>' + data.project + '('+ data.style +')</strong>')
             //   json object structure:
             //   {
             //       list:        Array,   # data array
