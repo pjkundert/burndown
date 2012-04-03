@@ -81,9 +81,55 @@
 
        ~/src/burndown/orgserver --refresh --org=~/org some project names
 
-    This can be set up to occur automatically (say, hourly) using crontab -e:
+    This can be set up to occur automatically (say, every 5 minues) using crontab -e:
 
     #+BEGIN_EXAMPLE
         # minute hour mday month wday command
-        # 0      *    *    *     *    $HOME/src/burndown/orgserver --refresh --log orgserver.log some project names
+        # */5    *    *    *     *    $HOME/src/burndown/orgserver --refresh --log orgserver.log some project names
     #+END_EXAMPLE
+
+*** REQUIREMENTS
+
+    If you are on a Mac, you might look at https://github.com/pjkundert/setup to
+    see detailed build and installation automation and instructions for these
+    (and other) packages.
+
+    The following Python modules are required (all these assume your
+    PYTHONPATH=/usr/local/lib/python2.7/site-packages):
+
+**** git-python 0.3; requires nose and mock for tests
+
+     Obtain source from https://github.com/gitpython-developers/GitPython
+     Assuming your PYTHONPATH=/usr/local/lib/python2.7/site-packages, this might
+     work:
+     
+     #+BEGIN_EXAMPLE
+     git clone git://github.com/gitpython-developers/GitPython.git git-python
+     cd git-python
+     git checkout origin 0.3
+     git submodule update --init --recursive
+     python setup.py install --prefix=/usr/local
+     #+END_EXAMPLE
+
+**** web.py
+
+     Obtain source from https://github.com/webpy/webpy
+
+     #+BEGIN_EXAMPLE
+     git clone git://github.com/webpy/webpy.git
+     cd webpy
+     git checkout origin master
+     python setup.py install --prefix=/usr/local
+     #+END_EXAMPLE
+
+**** wsgilog
+
+     Obtain source from https://bitbucket.org/lcrees/wsgilog/src
+
+     #+BEGIN_EXAMPLE
+     hg clone https://bitbucket.org/lcrees/wsgilog
+     cd wsgilog
+     hg pull -u
+     cd wsgilog # yes, again...
+     python setup.py install --prefix=/usr/local
+     #+END_EXAMPLE

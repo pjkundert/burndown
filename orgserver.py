@@ -12,9 +12,9 @@ api/data/<project>/<time-style>
 
    Returns <project> history from the org data in git, with the given time style:
 
-       sprint           Data is aggregated for each sprint elapsed
-       elapsed		Data is aggregated for periods of calendar time elapsed
        effort		Data is aggregated for periods of effort time elapsed
+       elapsed		Data is aggregated for periods of calendar time elapsed
+       sprint           Data is aggregated for each sprint elapsed
 
 """
 import argparse
@@ -428,6 +428,7 @@ def project_data_parse( data, project ):
         rec["blob"]		= blob.hexsha
         rec["date"]		= stats["date"]
         rec["date#"]		= stats["date#"]
+        rec["sprint"]		= stats["sprint"]
 
         dicts			= [		# (first contains *all* columns!)
             "total", "project",			# Overall sums
@@ -638,13 +639,15 @@ def project_stats_transform( results, style, bestfit=True ):
 
                 print "Filling %s" % ( repr( nxtymd ))
                 nxt["label"]	= "Day %d" % ( len( filled ) + 1 )
-                print "  Emitting %s: %s" % (
-                    nxt["label"], json.dumps( nxt, sort_keys=True, indent=4 ))
+                print "  Emitting %s" % ( nxt["label"] )
+                #print "  Emitting %s: %s" % (
+                #    nxt["label"], json.dumps( nxt, sort_keys=True, indent=4 ))
                 filled.append( nxt )
             print "Copying %s" % ( repr( recymd ))
             rec["label"]	= "Day %d" % ( len( filled ) + 1 )
-            print "  Emitting %s: %s" % (
-                rec["label"], json.dumps( rec, sort_keys=True, indent=4 ))
+            print "  Emitting %s" % ( rec["label"] )
+            #print "  Emitting %s: %s" % (
+            #    rec["label"], json.dumps( rec, sort_keys=True, indent=4 ))
             filled.append( rec )
     elif style == "effort":
         # Output the first record, and then scan the records, outputting a copy

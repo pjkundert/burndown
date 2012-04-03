@@ -33,7 +33,7 @@ while (( $# > 0 )); do
         REF=1
     elif [[ "$1" == "--server" ]]; then
         shift
-        SVR==${1}
+        SVR=${1}
     elif [[ "$1" == "--org" ]]; then
         shift
         ORG=${1}
