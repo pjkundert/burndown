@@ -867,26 +867,29 @@ def project_stats_transform( results, style, bestfit=True ):
             fx			= ( pC - cC ) / ( cslope - pslope )
             print "Slopes will intercept in future at x == %f" % ( fx )
 
-            # We can now project the finish date as of this sample
-            ftimestamp		= dslope * fx + dC
-            fdate		= None
-            try:
-                d		= datetime.date.fromtimestamp( ftimestamp )
-                fdate		= "%4d-%02d-%02d" % ( d.year, d.month, d.day )
-                print "  Finish date at projected intercept: %s" % ( fdate )
-            except:
-                print "  Finish date incomputable"
-                pass
-            rec["finish"]	= fdate
-
             # Compute the number of columns required to contain the point
             # where the progress and change lines meet.  However, clamp at a
             # fxmultiple of the length of the current data...  Then, compute
             # where the progress/change lines  intercept that last bar.  This
             # will cause the lines to cross exactly at the finish point, even
             # if it is between two bars.
-            fxnext              = min( int( math.ceil( fx )), fxmultiple * num)
+            fxint		= int( math.ceil( fx ))
+            fxnext              = min( fxint, fxmultiple * num)
             fxmax		= max( fxnext, fxmax or 0 )
+
+            # We can now project the finish date as of this sample
+            ftimestamp		= dslope * fx + dC
+            fdate		= None
+            try:
+                d		= datetime.date.fromtimestamp( ftimestamp )
+                fdate		= "%4d-%02d-%02d (Day %d)" % (
+                    d.year, d.month, d.day, fxint+1  )
+                print "  Finish date at projected intercept: %s" % ( fdate )
+            except:
+                print "  Finish date incomputable"
+                pass
+            rec["finish"]	= fdate
+
 
             lines["progress"]	= {"x1":px0,    "y1":py0,
                                    "x2":fxnext, "y2":int( pslope * fxnext + pC )}

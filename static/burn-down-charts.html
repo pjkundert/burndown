@@ -32,6 +32,10 @@
         border-radius: 5px;
         background-color: #FFF;
     }
+    .project-title {
+        color:          #000;
+        font-size:	18pt;
+    }
     </style>
 </head>
 <body style="background-color: #EEE;">
@@ -159,7 +163,12 @@
 
         function drawGraph(data) {
             $('.graph-container').html(
-                '<strong>' + data.project + '('+ data.style +')</strong>')
+                  '<span class="project-title">'+data.project+'('+data.style+')'
+                +   ' Began: <span id="project-start"></span>'
+                +   ' Now:   <span id="project-now"></span>'
+                +   ' End:   <span id="project-finish"></span>'
+                + '</span>')
+
             //   json object structure:
             //   {
             //       list:        Array,   # data array
@@ -585,6 +594,13 @@
 
             $('.hide').hide()
 
+            var i = 0
+            $('#project-start' ).html(data[i].date + '(' + data[i].label + ')')
+            i = lastLine
+            $('#project-now'   ).html(data[i].date + '(' + data[i].label + ')')
+            i = data.length - 1
+            $('#project-finish').html(data[i].finish)
+
             $('.bar').mouseover(function() {
                 if($(this).attr('drawline')!='false') {
                     var a                = $(this).attr('index')
@@ -592,6 +608,7 @@
                     // ordering works for last column, too
                     $('.show').hide()
                     b.show()
+                    $('#project-finish').html(data[a].finish)
                 }
             })
             $('.bar').mouseout(function() {
@@ -601,9 +618,9 @@
 
                     b.hide()
                     $('.show').show()
+                    $('#project-finish').html(data[data.length-1].finish)
                 }
             })
-
         }
 
     </script>
