@@ -1,3 +1,4 @@
+#+STARTUP: org-startup-with-inline-images inlineimages
 * burndown -- Charting for agile projects
 
   Uses [[https://github.com/mbostock/d3]] to generate burn-down charts from org-mode
@@ -39,11 +40,6 @@
    PID.  This is used by subsequent orgservers, to locate and terminate the
    other running orgserver.py instances.
 
-   The following environment variables may be set:
-
-       ORG_PROJECTS     -- The list of project names (default: project)
-       ORG_DIRECTORY    -- The org directory (default: ~/org)
-
    The options are:
 
    #+BEGIN_EXAMPLE
@@ -64,6 +60,15 @@
            --server <name>    Specify Web Server platform (default: web.py)
            <project>         .org files to parse          (default: project)
    #+END_EXAMPLE
+
+   The following environment variables may be set, instead of specifying the Org
+   data directory and the Projects list on the command line:
+
+   #+BEGIN_EXAMPLE
+   ORG_PROJECTS  -- The list of project names (default: project)
+   ORG_DIRECTORY -- The org directory         (default: ~/org)
+   #+END_EXAMPLE
+
 
 *** EXAMPLE
 
@@ -137,4 +142,4 @@
 *** SCREENSHOT
 
     The burndown project itself, in "effort" style:
-    [[file:[[./static/resources/screenshot-burndown.png]]]]
+    [[file:static/resources/screenshot-burndown.jpg]]
