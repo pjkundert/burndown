@@ -83,6 +83,7 @@ if [[ "${LOG}" != "-" && "${LOG#/}" == "${LOG}" ]]; then
     fi
 fi
 
+(( ! QUI )) && echo "${RUN} Burndown:  ${DIR}"
 (( ! QUI )) && echo "${RUN} Org Data:  ${ORG}"
 (( ! QUI )) && echo "${RUN} Projects:  ${PRO}"
 (( ! QUI )) && echo "${RUN} Log:       ${LOG}"
@@ -101,15 +102,17 @@ cleanup () {
 # Refresh the Git repositories, if --refresh, and deduce if we should restart
 # the orgserver.py (due to a commit to its Git repo).
 if (( REF )); then
-    (( ! QUI )) && echo "${RUN} Refreshing $ORG..."
-    ( cd $ORG && git pull -q origin master )
+    (( ! QUI )) && echo "${RUN} Refreshing Org Data: $ORG"
+    pull=$( cd $ORG && git pull origin master 2>&1 )
+    (( $? && ! QUI )) && echo "${RUN} Org Data update failed: $pull"
 fi
 master=$( cd $DIR && git show --oneline )
 if (( REF )); then
-    (( ! QUI )) && echo "${RUN} Refreshing $DIR..."
-    ( cd $DIR && git pull -q origin master )
+    (( ! QUI )) && echo "${RUN} Refreshing Burndown: $DIR"
+    pull=$( cd $DIR && git pull origin master 2>&1 )
+    (( $? && ! QUI )) && echo "${RUN} Burndown update failed: $pull"
     if [[ "$( cd $DIR && git show --oneline )" != "$master" ]]; then
-        (( ! QUI )) && echo "Detected $DIR update"
+        (( ! QUI )) && echo "${RUN} Detected $DIR update"
         RES=1
     fi
 fi
@@ -153,7 +156,8 @@ echo $pid >> $PID.$$
 
 # Harvest result of orgserver.py execution, and exit with that status
 wait $!
-if (( $? )); then
-    (( ! QUI )) && echo "${RUN} Failed: $?"
+status=$?
+if (( status )); then
+    (( ! QUI )) && echo "${RUN} Failed: $status"
 fi
 exit $?
