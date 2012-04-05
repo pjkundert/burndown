@@ -84,6 +84,7 @@
             type="text/javascript" rel="javascript"></script>
     <script type="text/javascript">
         var data;
+        var projects;	// projects list
         var project;	// Currently selected Project
         var style;	// currently select Style
 
@@ -96,7 +97,7 @@
             url: '/api/projects.json',
             dataType: 'jsonp',
             success: function(d) {
-                data             = d
+                projects           = d
                 new fillMenu(d)
             }
         })
@@ -123,6 +124,7 @@
                 url: '/api/data/' + project + '/' + style,
                 dataType: 'jsonp',
                 success: function(d) {
+                    data            = d
                     new drawGraph(d)
                 },
                 error: function(jxr, s, m) {
@@ -165,6 +167,10 @@
             return this.charAt(0).toUpperCase() + this.slice(1);
         }
 
+        $(window).resize(function(e) {
+            drawGraph(data)
+        })
+
         function drawGraph(data) {
             // Clear the graph-container each time; we'll always just use to
             // D3's .enter()... to reconstruct the SVG from scratch.
@@ -186,8 +192,9 @@
             var data             = data.list
 
             // Width and Height for the svg element
-            var w                = 1170                //document.body.offsetWidth
-            var h                = 400                 //document.body.offsetHeight
+            var containerWidth  = $('.container').width()
+            var w                = containerWidth-20
+            var h                = w/2
 
             // Graph positioning variables
             var top              = 20 // top side offset
