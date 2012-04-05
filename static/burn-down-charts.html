@@ -166,6 +166,9 @@
         }
 
         function drawGraph(data) {
+            // Clear the graph-container each time; we'll always just use to
+            // D3's .enter()... to reconstruct the SVG from scratch.
+
             $('.graph-container').html(
                   '<span class="project-title">'+data.project+'('+data.style+')'
                 +   ' Began: <span class="project-date" id="project-start"></span>'
@@ -188,8 +191,8 @@
 
             // Graph positioning variables
             var top              = 20 // top side offset
-            var right            = 20 // right side offset
-            var left             = 40 // left side offset
+            var right            = 70 // right side offset
+            var left             = 30 // left side offset
             var bottom           = 40 // bottom offset
 
             // Graph width and height relative to the svg
@@ -208,7 +211,13 @@
                 }
                 xMax.push(data[i].label)
             }
-            // y domain min and max
+
+            // y domain min and max.  The deltaTotal is the amount of the
+            // todoTotal below the 0 mark.  Round out the range to 10 x some
+            // handy working time unit.  yPeriod will be the time multiple we'll
+            // separate our yTicks Y axis ticks by, and yLabel will be the short
+            // name of the time period (eg. h, d, w)
+            yTicks		= 10
             var yMin = d3.min(data, function (d) {
                 if(d.estimated) {
                     return -( d.estimated['deltaTotal#'] )
@@ -219,16 +228,70 @@
             var yMax = d3.max(data, function (d) {
                 var e            = d.estimated
                 if(e) {
-                    return (e['todoTotal#'] + e['doneTotal#'])
+                    return (e['todoTotal#'] - e['deltaTotal#'])
                 } else {
                     return 0
                 }
             })
 
-            // if yMin is too small to create a negative rule line
-            // then force a rule
-            var yMin             = yMin > -(yMax/8) ? -(yMax/6) : yMin
+            // Each period is a multiple of the last
+            var yRange           = yMax - yMin
+            tlbl                 = [  "h", "d", "w", "m", "y" ] // each is a multiple of the last
+            tsec                 = [   60,   8,   5,   4,  12 ] // working time, idealized periods
 
+            var yPeriod          = 60 // 1m == 60 seconds
+            var yBasis           = yPeriod
+            for ( i = 0; i < tsec.length; ++i ) {
+                yBasis		*= tsec[i]	// Time unit basis
+                yPeriod          = yBasis	// Size of each tick period
+                yLabel           = tlbl[i]
+                if ( yBasis * yTicks >= yRange * 2 ) {
+                    yTicks	/= 2
+                    break
+                }
+                if ( yBasis * yTicks >= yRange ) {
+                    break
+                }
+                if ( yBasis * yTicks >= yRange / 2 ) {
+                    yPeriod	*= 2
+                    break
+                }
+            }
+
+            // Round the end of the Y range closest to a multiple of yPeriod
+            // out to the next yPeriod
+            //console.log( 'yMin == ' + yMin + ', yMax == ' + yMax + ', yPeriod == ' + yPeriod + ', yTicks == ' + yTicks )
+            if ( Math.abs( yMax ) % yPeriod < Math.abs( yMin ) % yPeriod ) {
+                yMax            += yPeriod - Math.abs( yMax ) % yPeriod
+                yMin             = yMax - yTicks * yPeriod
+                console.log( "Rounded yMax up to " + yMax.toString() )
+            } else {
+                yMin		-= yPeriod - Math.abs( yMin ) % yPeriod
+                yMax             = yMin + yTicks * yPeriod
+                console.log( "Rounded yMin down to " + yMin.toString() )
+            }
+            yMarks               = []
+            for (i = 0; i < yTicks+1; ++i) {
+                yMarks.push(yMin + i*yPeriod)
+            }
+
+            // Get the record.date# range, to rescale the computed finish date
+            // trend line into the graph Y scale.
+            var dMin = d3.min(data, function (d) {
+                return d['date#']
+            })
+            var dMax = d3.max(data, function (d) {
+                return d['date#']
+            })
+            function dScale(d) {
+                // Scales a date# in domain [dMin,dMax] into range [yMax,yMin]
+                //     yMax -          [0,1]             * (yMax-yMin)
+                return yMax - (d - dMin) / (dMax - dMin) * (yMax-yMin)
+            }
+            function dUnscale(y) {
+                // Scales a y value in domain [yMax,yMin] into range [dMin,dMax]
+                return dMax - (y - yMin) / (yMax - yMin) * (dMax-dMin)
+            }
             // define x and y scales
             var x = d3.scale.ordinal()
                 .domain(xMax)
@@ -249,9 +312,14 @@
                 .attr('class', 'xAxis')
                 .attr('transform', 'translate(' + left + ', ' + top + ')')
 
-            // Assign data using y axis ticks function to .rule elements
+            // Assign data using y axis ticks function to .rule elements.  We'll
+            // arbitarily always use 10 ticks on the Y axis, and we've adjusted
+            // the yMin/yMax to ensure that the ticks land on some simple
+            // multiple of 8 hours.
+
             var xRule = xAxis.selectAll('.rule')
-                .data(y.ticks(10))
+                //.data(y.ticks(10))
+                .data(yMarks)
             // Position container for rules
             .enter().append('g')
                 .attr("transform", function(d) {
@@ -261,13 +329,6 @@
             xRule.append('line')
                 .attr('x2', gWidth)
                 .attr('style', 'stroke: #EEE; stroke-width: 1; stroke-opacity: 1;')
-            function roundNumber(num, dec) {
-                var result = Math.round(num*Math.pow(10,dec))/Math.pow(10,dec);
-                if(result===0) {
-                    result                = '0.0'
-                }
-                return result;
-            }
 
             // Draw text for rules
             xRule.append("text")
@@ -276,10 +337,22 @@
                 .attr("transform", "translate(-10,0)")
                 .attr('text-anchor', 'end')
                 .attr('style', 'font-size: 10pt; fill: #BBB;')
-            // Convert from seconds to hours
-                .text(function(d) {
-                    return ((roundNumber(d/3600,1)+'0').replace(/\./,':'))
+                .text(function(y) {
+                    // Each yBasis units along the Y axis is a time unit of yLabel
+                    return (y/yBasis).toString() + yLabel
                 });
+
+            xRule.append("text")
+                .attr("x", w - left )
+                .attr("dy", ".25em")
+                .attr("transform", "translate(-10,0)")
+                .attr('text-anchor', 'end')
+                .attr('style', 'font-size: 10pt; fill: #BBB;')
+                .text(function(y) {
+                    function pad(n){return n<10 ? '0'+n : n}
+                    var d = new Date( dUnscale(y) * 1000 )
+                    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+                })
 
             // Create container for Graph
             var graph = svg.append('g')
@@ -307,19 +380,19 @@
             // - Offset is Estimations removed
 
             // Create Grey rect
-            var greyDelay                 = 20
-            var greyDuration              = 300
+            var greyDelay                 = 10
+            var greyDuration              = 100
             var greyY                     = []
             var greyH                     = []
 
             // Create Green rect
-            var greenDelay                = 20
+            var greenDelay                = 10
             var greenDuration             = 300
             var greenY                    = []
             var greenH                    = []
 
             // Create Red rect
-            var redDelay                  = 20
+            var redDelay                  = 10
             var redDuration               = 300
             var redY                      = []
             var redH                      = []
@@ -369,7 +442,8 @@
                     return greyY[i]
                 })
                 .attr('style', 'fill: #DDD; fill-opacity: 0.8;')
-                .transition().delay(function (d, i) {
+                .transition()
+                .delay(function (d, i) {
                     // Animate in sequence left to right
                     return (i*greyDelay)
                 }).duration(greyDuration)
@@ -395,7 +469,8 @@
                     return greyY[i]
                 })
                 .attr('style', 'fill: #060; fill-opacity: 0.4;')
-                .transition().delay(function (d, i) {
+                .transition()
+                .delay(function (d, i) {
                     // Start animation after Grey bar animation in
                     // sequence left to right every 20ms
                     return ((i*greenDelay) + (xMax.length*greyDelay + greyDuration))
@@ -433,7 +508,8 @@
                     return redY[i]
                 })
                 .attr('style', 'fill: #A00; fill-opacity: 0.5;')
-                .transition().delay(function (d, i) {
+                .transition()
+                .delay(function (d, i) {
                     // Start animation after Grey bar animation in
                     // sequence left to right every 20ms
                     return i*redDelay + (xMax.length*greyDelay + greyDuration)
@@ -445,7 +521,7 @@
 
             // Create container for x axis rules
             var yAxis = svg.append('g')
-                .attr('class', 'xAxis')
+                .attr('class', 'yAxis')
                 .attr('transform', 'translate('+left+', '+top+')')
             // Create and position container for rule
             var yRule = yAxis.selectAll('.rule')
@@ -474,11 +550,11 @@
                     return ""
                 })
 
-            // create and assign data to plot lines
+            // create and assign data to plot "progress" lines
             var plotLines = svg.append('g')
                 .attr('class','plotLines')
                 .attr('transform', 'translate('+left+', '+top+')')
-            var plot = plotLines.selectAll('.plot')
+            var plot = plotLines.selectAll('.progress')
                 .data(data)
             // Draw line for plot
             .enter().append('line')
@@ -524,24 +600,22 @@
             .duration(100)
                 .attr('x2', function (d, i) {
                     if(d.lines) {
-                        var a                = d.lines.progress.x2
-                        return x(a) + x.rangeBand()/2
+                        return x(d.lines.progress.x2) + x.rangeBand()/2
                     }
                     return x(0) + x.rangeBand()/2
                 })
                 .attr('y2', function (d, i) {
                     if(d.lines) {
-                        var a                = d.lines.progress.y2
-                        return y(a)
+                        return y(d.lines.progress.y2)
                     }
                     return y(0)
                 })
 
-            // create and assign data to plot lines
+            // create and assign data to plot "change" lines
             var deltaLines = svg.append('g')
                 .attr('class','plotLines')
                 .attr('transform', 'translate('+left+', '+top+')')
-            var delta = plotLines.selectAll('.delta')
+            var delta = plotLines.selectAll('.change')
                 .data(data)
             // Draw line for plot
             .enter().append('line')
@@ -587,15 +661,103 @@
             .duration(100)
                 .attr('x2', function (d, i) {
                     if ( d.lines ) {
-                        var a                = d.lines.change.x2
-                        return x(a) + (x.rangeBand()/2)
+                        return x(d.lines.change.x2) + (x.rangeBand()/2)
                     }
                     return x(0) + (x.rangeBand()/2)
                 })
                 .attr('y2', function (d, i) {
                     if ( d.lines ) {
-                        var a                = d.lines.change.y2
-                        return y(a)
+                        return y(d.lines.change.y2)
+                    }
+                    return y(0)
+                })
+
+
+            // create "date" marks for each data sample
+            var dMarks = svg.append('g')
+                .attr('class', 'dateMark')
+                .attr('transform', 'translate(' + left + ', ' + top + ')')
+            var dm = dMarks.selectAll('.datemarks')
+                .data(data)
+            // Draw line for plot
+            .enter().append('circle')
+                .attr('cx', function (d, i) {
+                    return x(i) + x.rangeBand()/2
+                })
+                .attr('cy', function (d, i) {
+                    return y(dScale(d['date#']))
+                })
+                .attr('r', function (d, i) {
+                    return 0
+                })
+                .attr('style', function (d, i) {
+                    return 'fill: #0C0; opacity: 0.2;'
+                })
+            .transition()
+            .delay(500)
+            .duration(100)
+                .attr('r', function(d, i) {
+                    return 5.0
+                })
+
+            // create and assign data to plot finish "date" lines.  We'll only
+            // do this if we've computed a finish date for the record.
+            var deltaLines = svg.append('g')
+                .attr('class','plotLines')
+                .attr('transform', 'translate('+left+', '+top+')')
+            var delta = plotLines.selectAll('.date')
+                .data(data)
+            // Draw line for plot
+            .enter().append('line')
+                .attr('x1', function (d, i) {
+                    if(d.finish && d.lines) {
+                        return x(d.lines.date.x1) + x.rangeBand()/2
+                    }
+                    return x(0) + x.rangeBand()/2
+                })
+                .attr('y1', function (d, i) {
+                    if(d.finish && d.lines) {
+                        return y(dScale(d.lines.date.y1))
+                    }
+                    return y(0)
+                })
+                .attr('x2', function (d, i) {
+                    if(d.finish && d.lines) {
+                        return x(d.lines.date.x1) + (x.rangeBand()/2)
+                    }
+                    return x(0) + x.rangeBand()/2
+                })
+                .attr('y2', function (d, i) {
+                    if(d.finish && d.lines) {
+                        return y(dScale(d.lines.date.y1))
+                    }
+                    return y(0)
+                })
+                .attr('style', function (d, i) {
+                    return 'stroke: #0C0; stroke-width: 2; stroke-opacity: 0.6;'
+                })
+                .attr('class', function (d, i) {
+                    if(lastLine == i) {
+                        return 'show'
+                    } else {
+                        return 'hide'
+                    }
+                })
+                .attr('index', function (d, i) {
+                    return i
+                })
+            .transition()
+            .delay(500)
+            .duration(100)
+                .attr('x2', function (d, i) {
+                    if (d.finish && d.lines) {
+                        return x(d.lines.date.x2) + (x.rangeBand()/2)
+                    }
+                    return x(0) + (x.rangeBand()/2)
+                })
+                .attr('y2', function (d, i) {
+                    if (d.finish && d.lines) {
+                        return y(dScale(d.lines.date.y2))
                     }
                     return y(0)
                 })

@@ -2,7 +2,67 @@
 * burndown -- Charting for agile projects
 
   Uses [[https://github.com/mbostock/d3]] to generate burn-down charts from org-mode
-  project Effort estimates and CLOCKSUM time log data.
+  project Effort estimates and CLOCKSUM time log data.  The historical "Effort"
+  (estimate) and "CLOCKSUM" (work) data are collected from the Git repository,
+  and rendered as Burndown charts, as per:
+
+      http://www.mountaingoatsoftware.com/scrum/alt-releaseburndown
+
+  Normal burndown charts don't differentiate betwee changes in project scope
+  (adding or removing task), and progress on the project (convertings tasks from
+  "todo" to "done").  The "alternative" burndown chart shows project progress by
+  changes along the top of the bar chart, and changes in project scope on the
+  bottom of the bar chart -- where the best-fit lines meet is where the project
+  is likely to be finished.
+
+  By separating the two concepts, it is absolutely clear where changes in the
+  project finish originate; either due to changes in work progress, or changes
+  in project scope.
+
+** Finish Day/Date Projection
+
+   The project is going to finish A) after a certain number of project Days of
+   effort, and B) on a certain calendar Date.  These are somewhat independent,
+   since the amount of work applied to the project changes over time (holidays,
+   changes in staffing, etc.)
+
+   To compute the Project's finish Day, we use a best-fit curve to project the
+   intersection of the Project's progress and change lines.  Based on the
+   burndown style selected, this reflects units of effort, units of elapsed
+   time, or sprints.
+
+   Once the finish Day is computed, we also use a best-fit line through each
+   sample's actual calendar date, to predict the finish Date.  This gives us a
+   correlation between each burndown unit, and calendar time.
+
+** Burndown Styles
+
+   Three styles of burndown chart are available.  All of these change the
+   meaning of the X (time) axis.  The Y (estimate) axis always represents the
+   amount of task "Effort" (estimate) remaining in the project.  By changing the
+   X axis, we can see how the project is progressing as we track:
+
+*** effort
+
+    Tracks project "CLOCKSUM" (work) time.  Each graph X axis sample represents
+    a certain number of hours of actual work on the project.  The default is 8
+    hours.  This computes the project finsh "Day" based on effort-days, and a
+    finish Date based on a projection of historical work Days per calendar Day.
+    
+*** elapsed
+
+    Tracks calendar elapsed time.  This produces one X axis sample per calendar
+    day.  Therefore, the computed project finish Day and calendar Date are
+    identical.
+   
+*** sprint (no yet implemented)
+    
+    Tracks project Sprints, one sprint per sample.  Works best if your sprints
+    represent roughly equal work effort, but will respond to changes in Sprint
+    effort over time, in a best-fit fashion.  Predicts the number of Sprints
+    remaining.
+
+** Maintaining org-mode Project Data
 
   Prepare an org-mode file containing a project, in the form of a tree of TODO
   entries.  Ensure that the top-level TODO entry for the project contains a date
