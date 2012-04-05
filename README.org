@@ -1,5 +1,5 @@
 #+STARTUP: org-startup-with-inline-images inlineimages
-* burndown -- Charting for agile projects
+* burndown -- Charting for agile projects using org-mode and Git
 
   Uses [[https://github.com/mbostock/d3]] to generate burn-down charts from org-mode
   project Effort estimates and CLOCKSUM time log data.  The historical "Effort"
@@ -55,7 +55,7 @@
     day.  Therefore, the computed project finish Day and calendar Date are
     identical.
    
-*** sprint (no yet implemented)
+*** sprint (not yet implemented)
     
     Tracks project Sprints, one sprint per sample.  Works best if your sprints
     represent roughly equal work effort, but will respond to changes in Sprint
@@ -89,16 +89,16 @@
   commit history, a burn-down chart will be rendered.  We use d3, so make sure
   your browser supports SVG (eg. Chrome, Firefox or IE9+).
 
-** orgserver -- Start a web.py based web and JSON API server
+** orgserver -- A web.py based HTML and JSON API server
 
    Serves org-mode data from the specified org directory, for the specified
    project(s).  May be configured to update from git, and kill running server(s)
    if changes to the burndown chart implementation itself are detected.
 
-   The running orgserver puts its python orgserver.py's PID in the org
-   directory, in an orgserver.pid.##### file ending with the orgserver's own
-   PID.  This is used by subsequent orgservers, to locate and terminate the
-   other running orgserver.py instances.
+   The running orgserver starts the python orgserver.py and puts its PID in the
+   org directory in an orgserver.pid.##### file ending with the orgserver's own
+   PID.  This is used by subsequent orgserver invocations, to locate and
+   terminate the other running orgserver.py instances.
 
    The options are:
 
@@ -129,7 +129,6 @@
    ORG_DIRECTORY -- The org directory         (default: ~/org)
    #+END_EXAMPLE
 
-
 *** EXAMPLE
 
     Run a orgserver bound to *:8080 on the host, serving org-mode data from
@@ -152,6 +151,115 @@
         # minute hour mday month wday command
         # */5    *    *    *     *    $HOME/src/burndown/orgserver --refresh --log orgserver.log some project names
     #+END_EXAMPLE
+
+** orgserver.py -- A Python module for process org-mode data in Git repositories
+
+   When run as a command (as by orgserver), orgserver.py starts a web.py
+   webserver, by default bound to port 8080 on all interfaces.
+
+*** HTTP JSON API
+    
+    The HTTP API respects the Accept: header, and generally responds to
+    "text/html" requests with HTML, and to "text/javascript", "application/json"
+    and "text/plain" requests with JSON.  Alternatively, any HTTP request may
+    force JSON by appending ".json" to any URI.
+
+**** /api/projects[.json]
+
+     Returns a list of all projects.
+     #+BEGIN_EXAMPLE
+     [
+         {
+             "project": "burndown", 
+             "styles": [
+                 "effort", 
+                 "elapsed", 
+                 "sprint"
+             ]
+         },
+     ]
+     #+END_EXAMPLE    
+
+**** /api/data/<project>[/<style>][.json]
+
+     Returns the request project's data in the specified style.  The "list"
+     attribute contains an entries with non-empty "estimated" and "work" data
+     for every day actual data, and computed data (inserted in-between existing
+     data points, to ensure that the data points are consistently spaced for the
+     requested X axis style.)  All project data is supplied in 2 forms: "xxxx":
+     <textual> and "xxxx#": <seconds>.  Relative time values (eg. task "added#")
+     are in seconds from 0 (when the project started), and absolute time values
+     (eg. the sample "date#") are in seconds since Jan 1, 1970 UTC (the unix
+     Epoch).
+
+     If burndown trend lines can be computed, they are included; the "change"
+     and "progress" lines are in seconds since the project started, and "date"
+     in seconds since the Epoch.
+
+     Empty data points are appended to "list" between the final day with project
+     data and the computed finish point of the project (or some maximum limit,
+     if the computed finish date is far in the future).  These have everything
+     except "lines", "work" and "estimated" are null.
+     
+     #+BEGIN_EXAMPLE    
+     {
+         "list": [
+             {
+                 "blob": "6c4a8197f1efc91dbb197a0e210ad7b38a03a6b1", 
+                 "date": "2012-03-01", 
+                 "date#": 1330585200.0, 
+                 "estimated": {
+                     "added": "0:00", 
+                     "added#": 0, 
+                     "addedTotal": "0:00", 
+                     "addedTotal#": 0, 
+                     ...
+                 }, 
+                 "label": "Day 1", 
+                 "lines": {
+                     "change": {
+                         "x1": 0, 
+                         "x2": 1, 
+                         "y1": 0, 
+                         "y2": 0
+                     }, 
+                     "date": {
+                         "x1": 0, 
+                         "x2": 1, 
+                         "y1": 1330585200, 
+                         "y2": 1330671600
+                     }, 
+                     "progress": {
+                         "x1": 0, 
+                         "x2": 1, 
+                         "y1": 61200, 
+                         "y2": 61200
+                 "sprint": 0, 
+                 "work": {
+                     "added": "0:00", 
+                     "added#": 0, 
+                     "addedTotal": "0:00", 
+                     "addedTotal#": 0, 
+                     ...
+                 }
+             }, 
+             ...
+             {
+                 "blob": null, 
+                 "date": "2012-04-02", 
+                 "date#": 1333425728.2857144, 
+                 "estimated": null, 
+                 "finish": "2012-03-25 (Day 15)", 
+                 "label": "Day 19", 
+                 "lines": null, 
+                 "sprint": 0, 
+                 "work": null
+             }, 
+         ],
+         "project": "burndown", 
+         "style": "effort"
+     }
+     #+END_EXAMPLE
 
 *** REQUIREMENTS
 
@@ -202,4 +310,4 @@
 *** SCREENSHOT
 
     The burndown project itself, in "effort" style:
-    [[file:static/resources/screenshot-burndown.jpg]]
+    [[file:static/resources/screenshot-burndown.png]]
