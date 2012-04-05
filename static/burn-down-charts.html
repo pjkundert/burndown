@@ -258,18 +258,10 @@
                 }
             }
 
-            // Round the end of the Y range closest to a multiple of yPeriod
-            // out to the next yPeriod
-            //console.log( 'yMin == ' + yMin + ', yMax == ' + yMax + ', yPeriod == ' + yPeriod + ', yTicks == ' + yTicks )
-            if ( Math.abs( yMax ) % yPeriod < Math.abs( yMin ) % yPeriod ) {
-                yMax            += yPeriod - Math.abs( yMax ) % yPeriod
-                yMin             = yMax - yTicks * yPeriod
-                console.log( "Rounded yMax up to " + yMax.toString() )
-            } else {
-                yMin		-= yPeriod - Math.abs( yMin ) % yPeriod
-                yMax             = yMin + yTicks * yPeriod
-                console.log( "Rounded yMin down to " + yMin.toString() )
-            }
+            // Always round yMin down to next period, and leave extra space on top
+            yMin		-= yPeriod - Math.abs( yMin ) % yPeriod
+            yMax                 = yMin + yTicks * yPeriod
+
             yMarks               = []
             for (i = 0; i < yTicks+1; ++i) {
                 yMarks.push(yMin + i*yPeriod)
@@ -286,7 +278,10 @@
             function dScale(d) {
                 // Scales a date# in domain [dMin,dMax] into range [yMax,yMin]
                 //     yMax -          [0,1]             * (yMax-yMin)
-                return yMax - (d - dMin) / (dMax - dMin) * (yMax-yMin)
+                if ( dMax > dMin )
+                    return yMax - (d - dMin) / (dMax - dMin) * (yMax-yMin)
+                // Only one date; no range
+                return yMax
             }
             function dUnscale(y) {
                 // Scales a y value in domain [yMax,yMin] into range [dMin,dMax]
@@ -332,9 +327,9 @@
 
             // Draw text for rules
             xRule.append("text")
-                .attr("x", 6)
+                .attr("x", 0)
+                .attr("dx", "-.25em")
                 .attr("dy", ".25em")
-                .attr("transform", "translate(-10,0)")
                 .attr('text-anchor', 'end')
                 .attr('style', 'font-size: 10pt; fill: #BBB;')
                 .text(function(y) {
@@ -343,11 +338,11 @@
                 });
 
             xRule.append("text")
-                .attr("x", w - left )
+                .attr("x", gWidth)
+                .attr("dx", ".25em")
                 .attr("dy", ".25em")
-                .attr("transform", "translate(-10,0)")
-                .attr('text-anchor', 'end')
-                .attr('style', 'font-size: 10pt; fill: #BBB;')
+                .attr('text-anchor', 'start')
+                .attr('style', 'font-size: 10pt; fill: #0C0;')
                 .text(function(y) {
                     function pad(n){return n<10 ? '0'+n : n}
                     var d = new Date( dUnscale(y) * 1000 )

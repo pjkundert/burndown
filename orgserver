@@ -23,6 +23,8 @@ REF=0 # refresh git repos
 LOG="-"
 ADR=""
 SVR=""
+HLP=0
+status=0
 
 while (( $# > 0 )); do
     if [[ "$1" == "--verbose" ]]; then
@@ -44,28 +46,38 @@ while (( $# > 0 )); do
         shift
         ADR=${1}
     elif [[ "$1" == "--help" ]]; then
-        echo "${0##*/} [--<option> [...]] [<project> [...]]"
-        echo "    --help            This help"
-        echo "    --verbose         Log activity"
-        echo "    --restart         Restart any running server   (default: no)"
-        echo "    --refresh         Refresh Git repositories     (default: no)"
-        echo "    --address <i[:p]> Bind to interface:port       (default: *:8080)"
-        echo "        Performs a \"git pull origin master\" on both the org data"
-        echo "        directory, and the orgserver directory.  In either case,"
-        echo "        if the master branch's commit changes, the orgserver will"
-        echo "        forcibly restart any running orgserver.py."
-        echo "    --org <dir>       org-mode data Git repository (default: ~/org)"
-        echo "    --log <file>      Log appending onto file      (default: -)"
-        echo "        If not relative: (.[.]/*) to current directory, or"
-        echo "        absolute: (/*), we assume it's relative to the org directory"
-        echo "    --server <name>    Specify Web Server platform (default: web.py)"
-        echo "    <project>         .org files to parse          (default: project)"
+        HLP=1
+    elif [[ "${1#--}" != "${1}" ]]; then
+        echo "Unrecognized option: ${1}"
+        HLP=1
+        status=1
     else
         # All other non-options are projects
         PRO="${PRO}${PRO:+ }${1}"
     fi
     shift
 done
+
+if (( HLP )); then
+    echo "${0##*/} [--<option> [...]] [<project> [...]]"
+    echo "    --help            This help"
+    echo "    --verbose         Log activity"
+    echo "    --restart         Restart any running server   (default: no)"
+    echo "    --refresh         Refresh Git repositories     (default: no)"
+    echo "    --address <i[:p]> Bind to interface:port       (default: *:8080)"
+    echo "        Performs a \"git pull origin master\" on both the org data"
+    echo "        directory, and the orgserver directory.  In either case,"
+    echo "        if the master branch's commit changes, the orgserver will"
+    echo "        forcibly restart any running orgserver.py."
+    echo "    --org <dir>       org-mode data Git repository (default: ~/org)"
+    echo "    --log <file>      Log appending onto file      (default: -)"
+    echo "        If not relative: (.[.]/*) to current directory, or"
+    echo "        absolute: (/*), we assume it's relative to the org directory"
+    echo "    --server <name>    Specify Web Server platform (default: web.py)"
+    echo "    <project>         .org files to parse          (default: project)"
+    exit $status
+fi
+
 
 # Our PID file is always in the target Org data directory.  We add a ".#####"
 # extension of this orgserver PID to the name; the file contains the PID of this
@@ -104,13 +116,13 @@ cleanup () {
 if (( REF )); then
     (( ! QUI )) && echo "${RUN} Refreshing Org Data: $ORG"
     pull=$( cd $ORG && git pull origin master 2>&1 )
-    (( $? && ! QUI )) && echo "${RUN} Org Data update failed: $pull"
+    (( $? || ! QUI )) && echo "${RUN} Org Data update: $pull"
 fi
 master=$( cd $DIR && git show --oneline )
 if (( REF )); then
     (( ! QUI )) && echo "${RUN} Refreshing Burndown: $DIR"
     pull=$( cd $DIR && git pull origin master 2>&1 )
-    (( $? && ! QUI )) && echo "${RUN} Burndown update failed: $pull"
+    (( $? || ! QUI )) && echo "${RUN} Burndown update: $pull"
     if [[ "$( cd $DIR && git show --oneline )" != "$master" ]]; then
         (( ! QUI )) && echo "${RUN} Detected $DIR update"
         RES=1
