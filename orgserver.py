@@ -376,7 +376,8 @@ def project_data_parse( data, project ):
                 ahead["task"]	= parse_task_heirarchy(
                     iter( blob.data_stream.read().splitlines() ))
                 print ahead["task"].display()
-
+                # ... <2012-03-02 Fri> ...
+                #      ^^^^^^^^^^
                 match		= re.search( r"<([0-9-]*)[^>]*>",
                                              ahead["task"].description )
                 if match is None:
@@ -385,8 +386,9 @@ def project_data_parse( data, project ):
                 ahead["date"]	= match.group( 1 )
                 ahead["date#"]	= time.mktime( time.strptime( ahead["date"],
                                                               "%Y-%m-%d" ))
-
-                match		= re.search( r"[Ss]print\s+([0-9-]+)>",
+                # ...Sprint 3...
+                #           ^
+                match		= re.search( r"[Ss]print\s+([0-9]+)",
                                              ahead["task"].description )
                 sprint		= 0
                 if match is not None:

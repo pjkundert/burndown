@@ -2,10 +2,8 @@
 *~
 *.tgz
 *.tar
-
 .DS_Store
 .#*
-animate.js
 *.log.*
 *.log
 *.pdf
