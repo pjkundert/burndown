@@ -307,6 +307,14 @@
      python setup.py install --prefix=/usr/local
      #+END_EXAMPLE
 
+**** argparse
+     For pre-2.6 Python, you'll need to install argparse and simplejson:
+
+     #+BEGIN_EXAMPLE
+     sudo easy_install argparse
+     sudo easy_install simplejson
+     #+END_EXAMPLE
+
 *** SCREENSHOT
 
     The burndown project itself, in "effort" style:

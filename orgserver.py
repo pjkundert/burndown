@@ -21,7 +21,10 @@ import argparse
 import cgi
 import copy
 import datetime
-import json
+try:
+    import json
+except:
+    import simplejson as json
 import logging
 import math
 import re
@@ -35,6 +38,37 @@ import git		# modules from site-packages
 
 from mathdict import *	# modules local to project
 
+
+# For compatibility with 2.5
+# Lifted from:
+#     http://stackoverflow.com/questions/1716428/def-next-for-python-pre-2-6-instead-of-object-next-method/1716464#1716464
+#     https://github.com/mikeboers/PyHAML/commit/45db152f9c8754ef3f8f249f3e68114c83f8580d
+
+try:
+    next
+except NameError:
+    class Throw(object): pass
+    throw = Throw() # easy sentinel hack
+    
+    def next(iterator, default=throw):
+        """next(iterator[, default])
+    
+        Return the next item from the iterator. If default is given
+        and the iterator is exhausted, it is returned instead of
+        raising StopIteration.
+        """
+        try:
+            iternext = iterator.next.__call__
+            # this way an AttributeError while executing next() isn't hidden
+            # (2.6 does this too)
+        except AttributeError:
+            raise TypeError("%s object is not an iterator" % type(iterator).__name__)
+        try:
+            return iternext()
+        except StopIteration:
+            if default is throw:
+                raise
+        return default
 
 def project_data( repository, projects ):
     """Given a repo name, return a dict containing a list of
