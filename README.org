@@ -149,7 +149,7 @@
 
     #+BEGIN_EXAMPLE
         # minute hour mday month wday command
-        # */5    *    *    *     *    $HOME/src/burndown/orgserver --refresh --log orgserver.log some project names
+          */5    *    *    *     *    $HOME/src/burndown/orgserver --refresh --log orgserver.log some project names
     #+END_EXAMPLE
 
 ** orgserver.py -- A Python module for process org-mode data in Git repositories
