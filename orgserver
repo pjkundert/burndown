@@ -112,18 +112,20 @@ cleanup () {
 }
 
 # Refresh the Git repositories, if --refresh, and deduce if we should restart
-# the orgserver.py (due to a commit to its Git repo).
+# the orgserver.py (due to a commit to its Git repo).  We always fetch and
+# checkout --force origin/master on the Org repo, because Git can't handle
+# merging them very well.
 if (( REF )); then
     (( ! QUI )) && echo "${RUN} Refreshing Org Data: $ORG"
-    pull=$( cd $ORG && git pull origin master 2>&1 )
+    pull=$( cd $ORG && git fetch origin 2>&1 && git checkout --force origin/master 2>&1 )
     (( $? || ! QUI )) && echo "${RUN} Org Data update: $pull"
 fi
-master=$( cd $DIR && git show --oneline )
+master=$( cd $DIR && git show --oneline --shortstat | head -1 )
 if (( REF )); then
     (( ! QUI )) && echo "${RUN} Refreshing Burndown: $DIR"
     pull=$( cd $DIR && git pull origin master 2>&1 )
     (( $? || ! QUI )) && echo "${RUN} Burndown update: $pull"
-    if [[ "$( cd $DIR && git show --oneline )" != "$master" ]]; then
+    if [[ "$( cd $DIR && git show --oneline --shortstat | head -1 )" != "$master" ]]; then
         (( ! QUI )) && echo "${RUN} Detected $DIR update"
         RES=1
     fi

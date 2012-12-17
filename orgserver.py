@@ -17,6 +17,8 @@ api/data/<project>/<time-style>
        sprint           Data is aggregated for each sprint elapsed
 
 """
+from __future__ import with_statement
+
 import argparse
 import cgi
 import copy
@@ -30,6 +32,7 @@ import math
 import re
 import socket
 import string
+import os
 import sys
 import textwrap
 import time
@@ -37,7 +40,6 @@ import time
 import git		# modules from site-packages
 
 from mathdict import *	# modules local to project
-
 
 # For compatibility with 2.5
 # Lifted from:
@@ -1377,6 +1379,7 @@ if __name__ == "__main__":
             "/",				"home",
             "/api/projects(.json)?",		"projects",
             "/api/data/(.*)",			"data",
+            "/(.*)",				"html",
         )
 
         class trailing_slash:
@@ -1434,6 +1437,28 @@ if __name__ == "__main__":
                 web.header( "Cache-Control", "no-cache" )
                 web.header( "Content-Type", content )
                 return response
+
+        class html:
+            """
+            If an arbitary /*[.html] name is provided, look for a
+            corresponding .html file in the org directory.
+            """
+            def GET( self, path ):
+                environ		= web.ctx.environ
+                queries		= web.input()
+                accept		= None
+                if path.endswith( ".html" ):
+                    path	= path[:-5] # Clip off .html; it is assumed
+                try:
+                    final	= os.path.join( args.repository[0], path + ".html" )
+                    with open( final, 'r' ) as f:
+                        response = f.read()
+                except Exception, e:
+                    raise http_exception( web, 404, e.message )
+
+                web.header( "Content-Type", "text/html" )
+                return response
+                    
 
         # web.py sets up logging, and then prints (hence logs) the address it is
         # about to bind to before it actually binds.  Thus, if another server is
