@@ -23,6 +23,7 @@ REF=0 # refresh git repos
 LOG="-"
 ADR=""
 SVR=""
+STY=
 HLP=0
 status=0
 
@@ -36,6 +37,9 @@ while (( $# > 0 )); do
     elif [[ "$1" == "--server" ]]; then
         shift
         SVR=${1}
+    elif [[ "$1" == "--style" ]]; then
+        shift
+        STY=${1}
     elif [[ "$1" == "--org" ]]; then
         shift
         ORG=${1}
@@ -74,6 +78,7 @@ if (( HLP )); then
     echo "        If not relative: (.[.]/*) to current directory, or"
     echo "        absolute: (/*), we assume it's relative to the org directory"
     echo "    --server <name>    Specify Web Server platform (default: web.py)"
+    echo "    --style <style>    Specify Burndown style (default: 'effort')"
     echo "    <project>         .org files to parse          (default: project)"
     exit $status
 fi
@@ -96,6 +101,7 @@ if [[ "${LOG}" != "-" && "${LOG#/}" == "${LOG}" ]]; then
 fi
 
 (( ! QUI )) && echo "${RUN} Burndown:  ${DIR}"
+(( ! QUI )) && echo "${RUN} Style:     ${STY:-effort}"
 (( ! QUI )) && echo "${RUN} Org Data:  ${ORG}"
 (( ! QUI )) && echo "${RUN} Projects:  ${PRO}"
 (( ! QUI )) && echo "${RUN} Log:       ${LOG}"
@@ -151,6 +157,7 @@ OPT=""
 [[ "${ADR}" != ""  ]] && OPT="${OPT}${OPT+ }--address ${ADR}"
 [[ "${SVR}" != ""  ]] && OPT="${OPT}${OPT+ }--server ${SVR}"
 [[ "${LOG}" != "-" ]] && OPT="${OPT}${OPT+ }--log ${LOG}"
+[[ "${STY}" != ""  ]] && OPT="${OPT}${OPT+ }--style ${STY}"
 CMD="./orgserver.py ${OPT} ${ORG} ${PRO}"
 
 # Run orgserver.py, savings its PID, and waiting 'til it exits.  Since web.py

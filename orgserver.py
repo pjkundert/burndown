@@ -1169,7 +1169,7 @@ def projects_request( repository, project,
     return accept, response
 
 
-def data_request( repository, project, path,
+def data_request( repository, project, path, style=None,
                   queries=None, environ=None, accept=None,
                   framework=None ):
     """Return the project data specified by path:
@@ -1179,6 +1179,9 @@ def data_request( repository, project, path,
     We'll parse the historical org-mode data, and cache it based on the
     hash of the commit.  The optional linear query option will changed
     from best-fit to linear estimation.
+
+    The style may be provided either as an argument or as a term in
+    the URL.  If none is provided, the 'effort' is assumed.
     """
     accept		= deduce_encoding( [ "application/json",
                                              "text/javascript",
@@ -1191,7 +1194,9 @@ def data_request( repository, project, path,
     # information: based on the actual amount of effort applied, what
     # is the remaining effort that will be required to complete the
     # project.
-    proj, style			= None, None
+    if style is None:
+        style			= 'effort'
+    proj			= None
     hexsha, data		= None, None
     try:
         terms			= path.split( "/" )
@@ -1199,10 +1204,8 @@ def data_request( repository, project, path,
         proj			= terms[0]
         if len( terms ) > 1:
             style		= terms[1]
-            if style not in [ "sprint", "elapsed", "effort" ]:
-                raise Exception( "Unknown style for project '%s': %s" % ( proj, style ))
-        else:
-            style		= "effort"
+        if style not in [ "sprint", "elapsed", "effort" ]:
+            raise Exception( "Unknown style for project '%s': %s" % ( proj, style ))
 
         try:
             hexsha, data	= project_data( repository, [ proj ] )
@@ -1287,6 +1290,9 @@ if __name__ == "__main__":
                          help="Log file, if desired" )
     parser.add_argument( '-r', '--redundant', action="store_true",
                          help="If server is already bound to port, fail quietly" )
+    parser.add_argument( '--style',
+                         default=None,
+                         help="Specify a default style; if None, default is 'effort'" )
     parser.add_argument( 'repository', nargs=1 )
     parser.add_argument( 'project', nargs="+" )
     args			= parser.parse_args()
@@ -1432,8 +1438,9 @@ if __name__ == "__main__":
                     path	= path[:-5] # Clip off .json
 
                 content, response = data_request( args.repository[0], args.project, path,
-                                                    queries=queries, environ=environ,
-                                                    accept=accept, framework=web )
+                                                  style=args.style,
+                                                  queries=queries, environ=environ,
+                                                  accept=accept, framework=web )
                 web.header( "Cache-Control", "no-cache" )
                 web.header( "Content-Type", content )
                 return response
