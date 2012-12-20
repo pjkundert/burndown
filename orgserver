@@ -15,7 +15,7 @@ export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 
 QUI=1
 RUN="${0##*/}-$( printf "%05d" $$ ):"
-DIR=${0%/*}
+DIR=$( dirname $( readlink -f ${BASH_SOURCE[0]} ))
 ORG=${ORG_DIRECTORY:-~/org}
 PRO=${ORG_PROJECTS:-}
 RES=0 # restart any running server
@@ -51,7 +51,7 @@ while (( $# > 0 )); do
         ADR=${1}
     elif [[ "$1" == "--help" ]]; then
         HLP=1
-    elif [[ "${1#--}" != "${1}" ]]; then
+    elif [[ "${1#-}" != "${1}" ]]; then
         echo "Unrecognized option: ${1}"
         HLP=1
         status=1
@@ -181,4 +181,4 @@ status=$?
 if (( status )); then
     (( ! QUI )) && echo "${RUN} Failed: $status"
 fi
-exit $?
+exit $status
