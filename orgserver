@@ -123,7 +123,7 @@ cleanup () {
 # merging them very well.
 if (( REF )); then
     (( ! QUI )) && echo "${RUN} Refreshing Org Data: $ORG"
-    pull=$( cd $ORG && git fetch origin 2>&1 && git checkout --force origin/master 2>&1 )
+    pull=$( cd $ORG && git fetch origin 2>&1 && git pull --force origin master 2>&1 )
     (( $? || ! QUI )) && echo "${RUN} Org Data update: $pull"
 fi
 master=$( cd $DIR && git show --oneline --shortstat | head -1 )
