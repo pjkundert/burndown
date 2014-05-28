@@ -24,6 +24,7 @@ LOG="-"
 ADR=""
 SVR=""
 STY=
+DAY=
 HLP=0
 status=0
 
@@ -49,6 +50,9 @@ while (( $# > 0 )); do
     elif [[ "$1" == "--address" ]]; then
         shift
         ADR=${1}
+    elif [[ "$1" == "--day" ]]; then
+        shift
+        DAY=${1}
     elif [[ "$1" == "--help" ]]; then
         HLP=1
     elif [[ "${1#-}" != "${1}" ]]; then
@@ -79,6 +83,7 @@ if (( HLP )); then
     echo "        absolute: (/*), we assume it's relative to the org directory"
     echo "    --server <name>    Specify Web Server platform (default: web.py)"
     echo "    --style <style>    Specify Burndown style (default: 'effort')"
+    echo "    --day <hours>      Specify number of hours per day (default: 8)"
     echo "    <project>         .org files to parse          (default: project)"
     exit $status
 fi
@@ -158,6 +163,7 @@ OPT=""
 [[ "${SVR}" != ""  ]] && OPT="${OPT}${OPT+ }--server ${SVR}"
 [[ "${LOG}" != "-" ]] && OPT="${OPT}${OPT+ }--log ${LOG}"
 [[ "${STY}" != ""  ]] && OPT="${OPT}${OPT+ }--style ${STY}"
+[[ "${DAY}" != ""  ]] && OPT="${OPT}${OPT+ }--day ${DAY}"
 CMD="./orgserver.py ${OPT} ${ORG} ${PRO}"
 
 # Run orgserver.py, savings its PID, and waiting 'til it exits.  Since web.py

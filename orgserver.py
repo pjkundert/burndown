@@ -41,6 +41,9 @@ import git		# modules from site-packages
 
 from mathdict import *	# modules local to project
 
+global day_seconds
+day_seconds		= 8*60*60 # Default day is 8 hours
+
 # For compatibility with 2.5
 # Lifted from:
 #     http://stackoverflow.com/questions/1716428/def-next-for-python-pre-2-6-instead-of-object-next-method/1716464#1716464
@@ -695,7 +698,7 @@ def project_stats_transform( results, style, bestfit=True ):
         # intervening records, and use the last record's 'xxxxTotal' data.  Then
         # emitting the same record multiple times, zero out the 'xxxx' data for
         # the additional copies, and use the original 'xxxxTotal' data.
-        increment		= 8*60*60
+        increment		= day_seconds
         step			= 0
         add			= {}	# data to save from discarded records
         changekeys		= [ "added", "delta", "done", "removed", "todo" ]
@@ -1288,6 +1291,8 @@ if __name__ == "__main__":
                          help="Default interface[:port] to bind to (default: all, port 80)" )
     parser.add_argument( '-l', '--log',
                          help="Log file, if desired" )
+    parser.add_argument( '-d', '--day',
+                         help="Hours in a day (default: %d)" % day_seconds )
     parser.add_argument( '-r', '--redundant', action="store_true",
                          help="If server is already bound to port, fail quietly" )
     parser.add_argument( '--style',
@@ -1302,6 +1307,8 @@ if __name__ == "__main__":
     assert 1 <= len( address ) <= 2
     address			= ( str( address[0] ),
                                     int( address[1] ) if len( address ) > 1 else 80 )
+    if args.day:
+        day_seconds		= int( float( args.day ) * 60 *60 )
 
     # Implement the various Web Servers
     if args.server == "web.py":
