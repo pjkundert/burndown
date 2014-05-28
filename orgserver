@@ -15,7 +15,7 @@ export PYTHONPATH=/usr/local/lib/python2.7/site-packages:${PYTHONPATH}
 
 QUI=1
 RUN="${0##*/}-$( printf "%05d" $$ ):"
-DIR=$( dirname $( readlink -f ${BASH_SOURCE[0]} ))
+DIR=$( dirname $( n=${BASH_SOURCE[0]}; while nn=$( readlink -n $n ); do n=$nn; done; echo "$n" ))
 ORG=${ORG_DIRECTORY:-~/org}
 PRO=${ORG_PROJECTS:-}
 RES=0 # restart any running server
