@@ -6,6 +6,5 @@
 .#*
 *.log.*
 *.log
-*.pdf
 *.tex
 auto/

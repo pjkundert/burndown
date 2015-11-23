@@ -8,8 +8,8 @@
 
       http://www.mountaingoatsoftware.com/scrum/alt-releaseburndown
 
-  Normal burndown charts don't differentiate betwee changes in project scope
-  (adding or removing task), and progress on the project (convertings tasks from
+  Normal burndown charts don't differentiate between changes in project scope
+  (adding or removing task), and progress on the project (converting tasks from
   "todo" to "done").  The "alternative" burndown chart shows project progress by
   changes along the top of the bar chart, and changes in project scope on the
   bottom of the bar chart -- where the best-fit lines meet is where the project
